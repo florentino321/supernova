@@ -1,0 +1,114 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------
+   Laptops Americanas · sistema visual
+   Tinta azul marino + rojo señal (acento) + azul de datos
+---------------------------------------------------------------- */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f0f2f5;
+  --ink: #0b1626;
+  --ink-2: #3c4859;
+  --muted: #6b7686;
+  --line: #e2e6ec;
+  --navy: #0d1b2e;
+  --navy-2: #16294a;
+  --accent: #d7263d;
+  --accent-ink: #ffffff;
+  --blue: #2563eb;
+  --green: #0f9d58;
+  --amber: #d97706;
+  --violet: #7c3aed;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-navy: var(--navy);
+  --color-navy-2: var(--navy-2);
+  --color-accent: var(--accent);
+  --color-blue: var(--blue);
+  --color-green: var(--green);
+  --color-amber: var(--amber);
+  --color-violet: var(--violet);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-display);
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display {
+  font-family: var(--font-display), var(--font-geist-sans), sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- componentes base ---------- */
+@utility card {
+  @apply rounded-2xl border border-line bg-surface;
+}
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition
+    disabled:cursor-not-allowed disabled:opacity-50;
+}
+@utility btn-primary {
+  @apply btn bg-navy text-white hover:bg-navy-2;
+}
+@utility btn-accent {
+  @apply btn bg-accent text-white hover:brightness-110;
+}
+@utility btn-ghost {
+  @apply btn border border-line bg-surface text-ink hover:bg-surface-2;
+}
+@utility btn-danger {
+  @apply btn border border-red-200 bg-red-50 text-red-700 hover:bg-red-100;
+}
+@utility input {
+  @apply w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink outline-none transition
+    placeholder:text-muted focus:border-blue focus:ring-4 focus:ring-blue-500/10;
+}
+@utility label {
+  @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted;
+}
+@utility chip {
+  @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold;
+}
+@layer components {
+  .tabla {
+    @apply w-full text-left text-sm;
+  }
+  .tabla th {
+    @apply border-b border-line px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted;
+  }
+  .tabla td {
+    @apply border-b border-line px-4 py-3 align-middle;
+  }
+  .tabla tbody tr:hover {
+    @apply bg-surface-2/60;
+  }
+}
+
+/* barra de desplazamiento discreta para tablas */
+.scroll-fino::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+.scroll-fino::-webkit-scrollbar-thumb {
+  background: #cfd5dd;
+  border-radius: 8px;
+}

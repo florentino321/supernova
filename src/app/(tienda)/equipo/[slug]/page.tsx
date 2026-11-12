@@ -1,0 +1,185 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { CheckCircle2, ChevronRight, MessageCircle, ShieldCheck, Store, Truck } from "lucide-react";
+import { ChipCondicion } from "@/components/chips";
+import { TarjetaEquipo } from "@/components/tarjeta-equipo";
+import { obtenerCatalogo, obtenerEquipo } from "@/lib/catalogo";
+import { enSoles, etiquetaCondicion } from "@/lib/formato";
+import { enlaceWhatsApp } from "@/lib/empresa";
+import { Galeria } from "./galeria";
+
+const explicacionGrado = {
+  A: "Estado estético excelente: sin marcas visibles o mínimas, parece nuevo.",
+  B: "Detalles estéticos leves (rayones finos o marcas de uso) que no afectan el funcionamiento.",
+  C: "Detalles estéticos notorios (golpes o desgaste). Funciona al 100% y por eso tiene mejor precio.",
+};
+
+export async function generateMetadata({ params }: PageProps<"/equipo/[slug]">) {
+  const { slug } = await params;
+  const u = await obtenerEquipo(slug);
+  return { title: u?.modelos?.nombre ?? "Equipo" };
+}
+
+export default async function Equipo({ params }: PageProps<"/equipo/[slug]">) {
+  const { slug } = await params;
+  const u = await obtenerEquipo(slug);
+  if (!u) notFound();
+
+  const { unidades } = await obtenerCatalogo();
+  const enVenta = unidades.filter((x) => x.id !== u.id && x.estado !== "vendido");
+  const otrasConfig = enVenta.filter((x) => x.modelo_id === u.modelo_id);
+  const relacionados = enVenta
+    .filter((x) => x.modelo_id !== u.modelo_id && x.modelos?.categorias?.slug === u.modelos?.categorias?.slug)
+    .slice(0, 4);
+
+  const nombre = u.modelos?.nombre ?? "";
+  const marca = u.modelos?.marcas?.nombre ?? "";
+  const precio = Number(u.precio_oferta_pen ?? u.precio_pen);
+  const vendible = u.estado === "disponible" || u.estado === "en_transito";
+  const mensaje =
+    u.estado === "en_transito"
+      ? `Hola, quiero separar la ${nombre} (${u.sku}) que está en camino. Precio ${enSoles(precio)}.`
+      : `Hola, me interesa la ${nombre} (${u.sku}) a ${enSoles(precio)}. ¿Sigue disponible?`;
+
+  const specs: [string, string | null | undefined][] = [
+    ["Marca", marca],
+    ["Procesador", u.procesador],
+    ["Memoria RAM", `${u.ram_gb} GB ${u.ram_tipo ?? ""}`],
+    ["Almacenamiento", u.almacenamiento],
+    ["Tarjeta de video", u.gpu],
+    ["Pantalla", `${u.pantalla_pulg}″ ${u.pantalla_detalle ?? ""}`],
+    ["Color", u.color],
+    ["Sistema operativo", u.sistema],
+    ["Año del modelo", u.modelos?.anio ? String(u.modelos.anio) : null],
+    ["Condición", `${etiquetaCondicion[u.condicion]}${u.condicion === "seminuevo" || u.condicion === "remate" ? ` · Grado ${u.grado}` : ""}`],
+    ["Garantía", `${u.garantia_meses} meses`],
+    ["Código", u.sku],
+  ];
+
+  return (
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <nav className="flex items-center gap-1 text-sm text-muted">
+        <Link href="/catalogo" className="hover:text-ink">Catálogo</Link>
+        <ChevronRight className="size-3.5" />
+        <Link href={`/catalogo?categoria=${u.modelos?.categorias?.slug}`} className="hover:text-ink">
+          {u.modelos?.categorias?.nombre}
+        </Link>
+        <ChevronRight className="size-3.5" />
+        <span className="truncate text-ink">{nombre}</span>
+      </nav>
+
+      <div className="mt-6 grid gap-10 lg:grid-cols-[1.15fr_1fr]">
+        <Galeria medios={u.medios ?? []} marca={marca} categoria={u.modelos?.categorias?.slug} nombre={nombre} />
+
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <ChipCondicion condicion={u.condicion} grado={u.grado} />
+            {u.estado === "disponible" && <span className="chip bg-emerald-50 text-emerald-700">● En tienda</span>}
+            {u.estado === "reservado" && <span className="chip bg-amber-100 text-amber-800">Reservado</span>}
+            {u.estado === "en_transito" && <span className="chip bg-violet-100 text-violet-700">En camino desde EE.UU.</span>}
+            {u.estado === "vendido" && <span className="chip bg-slate-800 text-white">Vendido</span>}
+          </div>
+          <p className="mt-4 text-sm font-semibold uppercase tracking-wide text-muted">{marca}</p>
+          <h1 className="font-display text-4xl font-extrabold leading-tight">{nombre}</h1>
+          <p className="mt-2 text-ink-2">
+            {u.procesador} · {u.ram_gb} GB RAM · {u.almacenamiento}
+            {u.gpu ? ` · ${u.gpu}` : ""}
+          </p>
+
+          <div className="card mt-6 p-5">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                {u.precio_oferta_pen != null && (
+                  <p className="num text-sm text-muted line-through">{enSoles(u.precio_pen)}</p>
+                )}
+                <p className="num font-display text-4xl font-extrabold">{enSoles(precio)}</p>
+                <p className="mt-1 text-xs text-muted">Precio en soles. Pago con Yape, Plin, transferencia o efectivo.</p>
+              </div>
+              {u.precio_oferta_pen != null && (
+                <span className="chip bg-accent text-white">
+                  −{Math.round((1 - Number(u.precio_oferta_pen) / Number(u.precio_pen)) * 100)}%
+                </span>
+              )}
+            </div>
+            <div className="mt-5 rounded-xl bg-surface-2 p-3 text-sm text-ink-2">
+              <strong className="text-ink">Pieza única.</strong> Solo existe esta unidad con esta configuración
+              {otrasConfig.length > 0 ? `; hay ${otrasConfig.length} configuración(es) más de este modelo abajo.` : "."}
+            </div>
+            {vendible ? (
+              <a href={enlaceWhatsApp(mensaje)} target="_blank" rel="noreferrer" className="btn-accent mt-5 w-full py-3 text-base">
+                <MessageCircle className="size-5" />
+                {u.estado === "en_transito" ? "Separar por WhatsApp" : "Comprar por WhatsApp"}
+              </a>
+            ) : (
+              <a
+                href={enlaceWhatsApp(`Hola, vi la ${nombre} pero ya no está disponible. ¿Tienen algo similar?`)}
+                target="_blank"
+                rel="noreferrer"
+                className="btn-primary mt-5 w-full py-3 text-base"
+              >
+                Pedir un equipo similar
+              </a>
+            )}
+          </div>
+
+          <ul className="mt-5 grid gap-2 text-sm text-ink-2 sm:grid-cols-3">
+            <li className="flex items-center gap-2"><ShieldCheck className="size-4 text-green" /> {u.garantia_meses} meses de garantía</li>
+            <li className="flex items-center gap-2"><Truck className="size-4 text-green" /> Envío a todo el Perú</li>
+            <li className="flex items-center gap-2"><Store className="size-4 text-green" /> Pruébala en tienda</li>
+          </ul>
+
+          {(u.condicion === "seminuevo" || u.condicion === "remate") && (
+            <div className="mt-5 rounded-xl border border-line p-4 text-sm">
+              <p className="font-semibold">¿Qué significa Grado {u.grado}?</p>
+              <p className="mt-1 text-muted">{explicacionGrado[u.grado]}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-14 grid gap-8 lg:grid-cols-[1.15fr_1fr]">
+        <section>
+          <h2 className="font-display text-2xl font-extrabold">Ficha técnica</h2>
+          <dl className="card mt-4 divide-y divide-line">
+            {specs
+              .filter(([, v]) => v && v.trim())
+              .map(([k, v]) => (
+                <div key={k} className="grid grid-cols-[160px_1fr] gap-4 px-5 py-3 text-sm">
+                  <dt className="text-muted">{k}</dt>
+                  <dd className="font-medium">{v}</dd>
+                </div>
+              ))}
+          </dl>
+        </section>
+        <section>
+          <h2 className="font-display text-2xl font-extrabold">Descripción</h2>
+          <p className="mt-4 leading-relaxed text-ink-2">{u.descripcion ?? u.modelos?.descripcion}</p>
+          <h3 className="mt-6 font-semibold">Incluye</h3>
+          <ul className="mt-2 space-y-1.5 text-sm text-ink-2">
+            {["Cargador original", "Limpieza interna y pasta térmica nueva", "Windows activado y programas básicos", "Comprobante con número de serie"].map((t) => (
+              <li key={t} className="flex gap-2"><CheckCircle2 className="size-4 text-green" /> {t}</li>
+            ))}
+          </ul>
+        </section>
+      </div>
+
+      {otrasConfig.length > 0 && (
+        <section className="mt-16">
+          <h2 className="font-display text-2xl font-extrabold">Otras configuraciones de este modelo</h2>
+          <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {otrasConfig.map((x) => <TarjetaEquipo key={x.id} u={x} />)}
+          </div>
+        </section>
+      )}
+
+      {relacionados.length > 0 && (
+        <section className="mt-16">
+          <h2 className="font-display text-2xl font-extrabold">También te puede interesar</h2>
+          <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {relacionados.map((x) => <TarjetaEquipo key={x.id} u={x} />)}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
