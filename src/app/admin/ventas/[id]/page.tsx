@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { obtenerSesion } from "@/lib/sesion";
-import { EMPRESA } from "@/lib/empresa";
+import { obtenerEmpresa } from "@/lib/empresa-datos";
+import { DatosEmisor } from "@/components/datos-emisor";
 import { enSoles, enPorcentaje, etiquetaCanal, etiquetaPago, fecha, fechaHora } from "@/lib/formato";
 import type { Venta } from "@/lib/tipos";
 import { BotonesVenta } from "./botones-venta";
@@ -12,13 +13,14 @@ export default async function DetalleVenta({ params, searchParams }: PageProps<"
   const { id } = await params;
   const sp = await searchParams;
   const { supabase, esAdmin } = await obtenerSesion();
-  const [{ data }, { data: reserva }] = await Promise.all([
+  const [{ data }, { data: reserva }, empresa] = await Promise.all([
     supabase
       .from("ventas")
       .select("*, unidades(*, modelos(nombre, marcas(nombre))), clientes(*), perfiles(nombre)")
       .eq("id", id)
       .maybeSingle(),
     supabase.from("reservas").select("codigo, adelanto_pen, creado_en").eq("venta_id", id).maybeSingle(),
+    obtenerEmpresa(),
   ]);
   if (!data) notFound();
   const v = data as unknown as Venta;
@@ -49,7 +51,7 @@ export default async function DetalleVenta({ params, searchParams }: PageProps<"
           <div className="flex flex-wrap items-start justify-between gap-6 border-b border-line pb-6">
             <div>
               <Logo />
-              <p className="mt-3 text-sm text-muted">{EMPRESA.direccion}<br />{EMPRESA.ciudad} · {EMPRESA.email}</p>
+              <DatosEmisor e={empresa} />
             </div>
             <div className="text-right">
               <p className="text-xs font-semibold uppercase tracking-widest text-muted">Nota de venta</p>

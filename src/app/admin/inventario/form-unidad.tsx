@@ -1,119 +1,144 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
-import { Save } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { Camera, ImagePlus, Loader2, Save, X } from "lucide-react";
 import { guardarUnidad, type Resultado } from "../acciones";
 import { enSoles, enPorcentaje } from "@/lib/formato";
-import type { Lote, Modelo, Unidad } from "@/lib/tipos";
+import { ALMACENAMIENTOS, GPUS, PANTALLAS, PROCESADORES, RAMS } from "@/lib/opciones-equipo";
+import { subirArchivo, validarArchivo } from "@/lib/subir-medios";
+import type { Unidad } from "@/lib/tipos";
+import type { DatosFormulario } from "./datos-form";
 
-type Plantilla = Partial<Unidad> & { modelo_id: number };
+const hoyLima = () => new Date(Date.now() - 5 * 3600_000).toISOString().slice(0, 10);
 
-export function FormUnidad({
-  unidad,
-  modelos,
-  lotes,
-  plantillas,
-  esAdmin,
-}: {
-  unidad?: Unidad;
-  modelos: Modelo[];
-  lotes: Lote[];
-  plantillas: Plantilla[];
-  esAdmin: boolean;
-}) {
+export function FormUnidad({ unidad, modelos, marcas, categorias, procesadoresUsados, gpusUsadas }: DatosFormulario & { unidad?: Unidad }) {
+  const router = useRouter();
   const [estado, accion, pendiente] = useActionState<Resultado, FormData>(guardarUnidad, {});
-  const form = useRef<HTMLFormElement>(null);
-  const [costoUsd, setCostoUsd] = useState(Number(unidad?.costo_usd ?? 0));
-  const [extra, setExtra] = useState(Number(unidad?.costo_extra_pen ?? 0));
-  const [loteId, setLoteId] = useState(String(unidad?.lote_id ?? ""));
-  const [precio, setPrecio] = useState(Number(unidad?.precio_pen ?? 0));
-  const [oferta, setOferta] = useState(unidad?.precio_oferta_pen != null ? Number(unidad.precio_oferta_pen) : 0);
 
-  const tc = Number(lotes.find((l) => String(l.id) === loteId)?.tipo_cambio ?? 3.75);
-  const costo = costoUsd * tc + extra;
-  const venta = oferta > 0 ? oferta : precio;
-  const utilidad = venta - costo;
-
-  // al elegir modelo en un equipo nuevo, sugerir la configuración del último equipo de ese modelo
-  const alElegirModelo = (id: string) => {
-    if (unidad || !form.current) return;
-    const p = plantillas.find((x) => String(x.modelo_id) === id);
-    if (!p) return;
-    const campos = ["procesador", "ram_gb", "ram_tipo", "almacenamiento_gb", "almacenamiento", "gpu", "pantalla_pulg", "pantalla_detalle", "color", "sistema"] as const;
-    for (const c of campos) {
-      const el = form.current.elements.namedItem(c) as HTMLInputElement | null;
-      if (el && !el.value && p[c] != null) el.value = String(p[c]);
+  // ---------- modelo, marca y categoría (se escriben; si el modelo ya existe se completan solos) ----------
+  const [modelo, setModelo] = useState(unidad?.modelos?.nombre ?? "");
+  const [marca, setMarca] = useState(unidad?.modelos?.marcas?.nombre ?? "");
+  const [categoria, setCategoria] = useState(String(unidad?.modelos?.categoria_id ?? ""));
+  const alEscribirModelo = (v: string) => {
+    setModelo(v);
+    const m = modelos.find((x) => x.nombre.toLowerCase() === v.trim().toLowerCase());
+    if (m) {
+      setMarca(m.marca);
+      setCategoria(String(m.categoria_id));
+    } else if (!marca) {
+      // sugerir la marca por la primera palabra ("Dell Latitude 5420" → Dell)
+      const primera = v.trim().split(/\s+/)[0]?.toLowerCase();
+      const mm = marcas.find((x) => x.nombre.toLowerCase() === primera);
+      if (mm) setMarca(mm.nombre);
     }
   };
 
-  const porModelo = new Map<string, Modelo[]>();
-  modelos.forEach((m) => {
-    const k = m.marcas?.nombre ?? "Otros";
-    porModelo.set(k, [...(porModelo.get(k) ?? []), m]);
-  });
+  // ---------- precios ----------
+  const [costo, setCosto] = useState(unidad?.costo_adquisicion_pen != null ? Number(unidad.costo_adquisicion_pen) : 0);
+  const [precio, setPrecio] = useState(Number(unidad?.precio_pen ?? 0));
+  const [oferta, setOferta] = useState(unidad?.precio_oferta_pen != null ? Number(unidad.precio_oferta_pen) : 0);
+  const venta = oferta > 0 ? oferta : precio;
+  const utilidad = venta - costo;
+
+  // ---------- fotos (solo al registrar; luego se gestionan en la ficha) ----------
+  const [fotos, setFotos] = useState<{ file: File; url: string }[]>([]);
+  const [errorFoto, setErrorFoto] = useState("");
+  const [subiendo, setSubiendo] = useState<{ hechas: number; total: number } | null>(null);
+  const galeria = useRef<HTMLInputElement>(null);
+  const camara = useRef<HTMLInputElement>(null);
+  const agregar = (files: FileList | null) => {
+    if (!files) return;
+    setErrorFoto("");
+    const nuevas: { file: File; url: string }[] = [];
+    for (const file of Array.from(files)) {
+      const motivo = validarArchivo(file);
+      if (motivo) setErrorFoto(motivo);
+      else nuevas.push({ file, url: URL.createObjectURL(file) });
+    }
+    setFotos((f) => [...f, ...nuevas]);
+  };
+
+  // al registrar un equipo nuevo: subir las fotos elegidas y abrir su ficha
+  const procesado = useRef<number | null>(null);
+  useEffect(() => {
+    const id = estado.id;
+    if (!id || unidad || procesado.current === id) return;
+    procesado.current = id;
+    (async () => {
+      let fallidas = 0;
+      setSubiendo({ hechas: 0, total: fotos.length });
+      for (let i = 0; i < fotos.length; i++) {
+        try {
+          await subirArchivo(id, fotos[i].file);
+        } catch {
+          fallidas++;
+        }
+        setSubiendo({ hechas: i + 1, total: fotos.length });
+      }
+      router.push(`/admin/inventario/${id}?creado=1${fallidas ? `&fallidas=${fallidas}` : ""}`);
+    })();
+  }, [estado.id, unidad, fotos, router]);
+
+  const ocupado = pendiente || subiendo !== null;
 
   return (
-    <form ref={form} action={accion} className="grid gap-6 xl:grid-cols-[1fr_320px]">
+    <form action={accion} className="grid gap-6 xl:grid-cols-[1fr_320px]">
       {unidad && <input type="hidden" name="id" value={unidad.id} />}
       <div className="space-y-6">
-        <Seccion titulo="Identificación">
-          <Campo label="Modelo *" className="sm:col-span-2">
-            <select name="modelo_id" required defaultValue={unidad?.modelo_id ?? ""} className="input" onChange={(e) => alElegirModelo(e.target.value)}>
-              <option value="">Elige un modelo…</option>
-              {[...porModelo.entries()].map(([marca, ms]) => (
-                <optgroup key={marca} label={marca}>
-                  {ms.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-                </optgroup>
-              ))}
-            </select>
+        <Seccion titulo="Equipo">
+          <Campo label="Modelo *" className="sm:col-span-2" nota={modelos.length ? "Escribe o elige uno ya registrado." : undefined}>
+            <input
+              name="modelo"
+              required
+              list="lista-modelos"
+              value={modelo}
+              onChange={(e) => alEscribirModelo(e.target.value)}
+              placeholder="Ej.: Dell Latitude 5420"
+              className="input"
+              autoComplete="off"
+            />
+            <datalist id="lista-modelos">
+              {modelos.map((m) => <option key={m.id} value={m.nombre}>{m.marca}</option>)}
+            </datalist>
           </Campo>
-          <Campo label="Código (SKU)">
-            <input name="sku" defaultValue={unidad?.sku} placeholder="Se genera solo" className="input font-mono" />
+          <Campo label="Marca *">
+            <input name="marca" required list="lista-marcas" value={marca} onChange={(e) => setMarca(e.target.value)} placeholder="Ej.: Dell" className="input" autoComplete="off" />
+            <datalist id="lista-marcas">
+              {marcas.map((m) => <option key={m.id} value={m.nombre} />)}
+            </datalist>
           </Campo>
-          <Campo label="N.º de serie">
-            <input name="serie" defaultValue={unidad?.serie ?? ""} className="input font-mono" placeholder="Service tag / serial" />
-          </Campo>
-          <Campo label="Importación (lote)">
-            <select name="lote_id" value={loteId} onChange={(e) => setLoteId(e.target.value)} className="input">
-              <option value="">Sin lote</option>
-              {lotes.map((l) => <option key={l.id} value={l.id}>{l.codigo} · {l.proveedor}</option>)}
+          <Campo label="Categoría *">
+            <select name="categoria_id" required value={categoria} onChange={(e) => setCategoria(e.target.value)} className="input">
+              <option value="">Elige…</option>
+              {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
             </select>
           </Campo>
           <Campo label="Fecha de ingreso a tienda">
-            <input type="date" name="ingresado_en" defaultValue={unidad?.ingresado_en ?? new Date().toISOString().slice(0, 10)} className="input" />
+            <input type="date" name="ingresado_en" defaultValue={unidad?.ingresado_en ?? hoyLima()} className="input" />
           </Campo>
+          {unidad && (
+            <Campo label="Código">
+              <input value={unidad.sku} readOnly className="input bg-surface-2 font-mono" />
+            </Campo>
+          )}
         </Seccion>
 
-        <Seccion titulo="Configuración (variante)" nota="Las especificaciones reales de ESTA unidad.">
+        <Seccion titulo="Configuración" nota="Las especificaciones de esta unidad.">
           <Campo label="Procesador *" className="sm:col-span-2">
-            <input name="procesador" required defaultValue={unidad?.procesador} placeholder="Intel Core i7-8750H" className="input" />
+            <SelectConOtro name="procesador" requerido inicial={unidad?.procesador} grupos={conUsados(PROCESADORES, procesadoresUsados)} placeholder="Ej.: Intel Core i7-1165G7" />
           </Campo>
-          <Campo label="RAM (GB)">
-            <input name="ram_gb" type="number" min={2} defaultValue={unidad?.ram_gb ?? 16} className="input" />
+          <Campo label="Memoria RAM">
+            <SelectConOtro name="ram_gb" inicial={unidad ? String(unidad.ram_gb) : "16"} opciones={RAMS.map((r) => [String(r), `${r} GB`])} placeholder="GB" tipo="number" />
           </Campo>
-          <Campo label="Tipo de RAM">
-            <input name="ram_tipo" defaultValue={unidad?.ram_tipo ?? ""} placeholder="DDR4" className="input" />
-          </Campo>
-          <Campo label="Almacenamiento total (GB)">
-            <input name="almacenamiento_gb" type="number" min={16} defaultValue={unidad?.almacenamiento_gb ?? 512} className="input" />
-          </Campo>
-          <Campo label="Detalle de almacenamiento">
-            <input name="almacenamiento" defaultValue={unidad?.almacenamiento ?? ""} placeholder="512 GB SSD NVMe" className="input" />
+          <Campo label="Almacenamiento *">
+            <SelectConOtro name="almacenamiento" requerido inicial={unidad?.almacenamiento ?? "512 GB SSD"} opciones={ALMACENAMIENTOS.map((a) => [a, a])} placeholder="Ej.: 1 TB SSD + 1 TB HDD" />
           </Campo>
           <Campo label="Tarjeta de video" className="sm:col-span-2">
-            <input name="gpu" defaultValue={unidad?.gpu ?? ""} placeholder="NVIDIA GeForce RTX 3060 6 GB" className="input" />
+            <SelectConOtro name="gpu" inicial={unidad?.gpu ?? "Gráficos integrados Intel"} grupos={conUsados(GPUS, gpusUsadas)} placeholder="Ej.: NVIDIA GeForce RTX 3060 6 GB" />
           </Campo>
-          <Campo label="Pantalla (pulgadas)">
-            <input name="pantalla_pulg" type="number" step="0.1" defaultValue={unidad?.pantalla_pulg ?? 15.6} className="input" />
-          </Campo>
-          <Campo label="Detalle de pantalla">
-            <input name="pantalla_detalle" defaultValue={unidad?.pantalla_detalle ?? ""} placeholder="Full HD 144 Hz" className="input" />
-          </Campo>
-          <Campo label="Color">
-            <input name="color" defaultValue={unidad?.color ?? ""} className="input" />
-          </Campo>
-          <Campo label="Sistema operativo">
-            <input name="sistema" defaultValue={unidad?.sistema ?? "Windows 11 Pro"} className="input" />
+          <Campo label="Pantalla">
+            <SelectConOtro name="pantalla_pulg" inicial={unidad ? String(Number(unidad.pantalla_pulg)) : "15.6"} opciones={PANTALLAS.map((p) => [String(p), `${p}″`])} placeholder="Pulgadas" tipo="number" />
           </Campo>
         </Seccion>
 
@@ -123,7 +148,7 @@ export function FormUnidad({
               <option value="nuevo">Nuevo</option>
               <option value="open_box">Open box</option>
               <option value="seminuevo">Seminuevo certificado</option>
-              <option value="remate">Remate</option>
+              {unidad?.condicion === "remate" && <option value="remate">Remate</option>}
             </select>
           </Campo>
           <Campo label="Grado estético">
@@ -133,13 +158,16 @@ export function FormUnidad({
               <option value="C">C · Detalles notorios</option>
             </select>
           </Campo>
-          <Campo label="Garantía (meses)">
-            <input name="garantia_meses" type="number" min={0} defaultValue={unidad?.garantia_meses ?? 12} className="input" />
+          <Campo label="Garantía">
+            <select name="garantia_meses" defaultValue={String(unidad?.garantia_meses ?? 12)} className="input">
+              {[0, 3, 6, 12, 24].map((m) => <option key={m} value={m}>{m ? `${m} meses` : "Sin garantía"}</option>)}
+              {unidad && ![0, 3, 6, 12, 24].includes(unidad.garantia_meses) && <option value={unidad.garantia_meses}>{unidad.garantia_meses} meses</option>}
+            </select>
           </Campo>
           <Campo label="Estado en inventario">
             <select name="estado" defaultValue={unidad?.estado ?? "disponible"} className="input">
-              <option value="en_transito">En tránsito</option>
               <option value="disponible">Disponible</option>
+              <option value="en_transito">En camino (llega pronto)</option>
               <option value="reservado">Reservado</option>
               <option value="garantia">En garantía / taller</option>
               <option value="baja">De baja</option>
@@ -148,68 +176,149 @@ export function FormUnidad({
           </Campo>
         </Seccion>
 
-        <Seccion titulo="Textos">
-          <Campo label="Descripción para la web" className="sm:col-span-2">
-            <textarea name="descripcion" rows={4} defaultValue={unidad?.descripcion ?? ""} className="input" />
-          </Campo>
-          <Campo label="Notas internas (no se publican)" className="sm:col-span-2">
-            <textarea name="notas_internas" rows={2} defaultValue={unidad?.notas_internas ?? ""} className="input" placeholder="Batería al 87 %, se cambió teclado…" />
-          </Campo>
-        </Seccion>
+        {!unidad && (
+          <section className="card p-5">
+            <p className="font-display text-lg font-bold">Fotos y videos</p>
+            <p className="text-sm text-muted">Se suben al guardar. La primera foto será la portada. Se comprimen solas.</p>
+            <input ref={galeria} type="file" multiple accept="image/*,video/mp4,video/webm,video/quicktime" className="hidden" onChange={(e) => { agregar(e.target.files); e.target.value = ""; }} />
+            <input ref={camara} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { agregar(e.target.files); e.target.value = ""; }} />
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button type="button" className="btn-ghost" onClick={() => galeria.current?.click()}>
+                <ImagePlus className="size-4" /> Elegir fotos
+              </button>
+              <button type="button" className="btn-ghost sm:hidden" onClick={() => camara.current?.click()}>
+                <Camera className="size-4" /> Tomar foto
+              </button>
+            </div>
+            {errorFoto && <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{errorFoto}</p>}
+            {fotos.length > 0 && (
+              <ul className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+                {fotos.map((f, i) => (
+                  <li key={f.url} className={`relative aspect-square overflow-hidden rounded-xl border-2 bg-surface-2 ${i === 0 ? "border-accent" : "border-line"}`}>
+                    {f.file.type.startsWith("video/") ? (
+                      <video src={f.url} className="size-full object-cover" muted />
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={f.url} alt="" className="size-full object-cover" />
+                    )}
+                    {i === 0 && <span className="chip absolute left-1.5 top-1.5 bg-accent text-[10px] text-white">Portada</span>}
+                    <button
+                      type="button"
+                      className="absolute right-1.5 top-1.5 grid size-6 place-items-center rounded-full bg-white/95 text-red-600"
+                      onClick={() => setFotos((l) => l.filter((x) => x.url !== f.url))}
+                      aria-label="Quitar foto"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
       </div>
 
       <div className="space-y-6 xl:sticky xl:top-6 xl:self-start">
         <div className="card p-5">
           <p className="font-display text-lg font-bold">Precio</p>
           <div className="mt-4 space-y-4">
-            {esAdmin ? (
-              <div className="grid grid-cols-2 gap-3">
-                <Campo label="Costo compra (USD)">
-                  <input name="costo_usd" type="number" step="0.01" value={costoUsd || ""} onChange={(e) => setCostoUsd(Number(e.target.value))} className="input" />
-                </Campo>
-                <Campo label="Gastos extra (S/)">
-                  <input name="costo_extra_pen" type="number" step="0.01" value={extra || ""} onChange={(e) => setExtra(Number(e.target.value))} className="input" />
-                </Campo>
-              </div>
-            ) : (
-              <>
-                <input type="hidden" name="costo_usd" value={costoUsd} />
-                <input type="hidden" name="costo_extra_pen" value={extra} />
-              </>
-            )}
+            <Campo label="Precio de adquisición (S/)" nota="Todo lo que costó tenerlo en tienda: compra, pasaje, desaduanaje y otros gastos.">
+              <input name="costo_adquisicion_pen" type="number" step="0.01" min={0} inputMode="decimal" value={costo || ""} onChange={(e) => setCosto(Number(e.target.value))} className="input" />
+            </Campo>
             <Campo label="Precio de venta (S/) *">
-              <input name="precio_pen" type="number" step="0.01" required value={precio || ""} onChange={(e) => setPrecio(Number(e.target.value))} className="input text-lg font-semibold" />
+              <input name="precio_pen" type="number" step="0.01" inputMode="decimal" required value={precio || ""} onChange={(e) => setPrecio(Number(e.target.value))} className="input text-lg font-semibold" />
             </Campo>
             <Campo label="Precio de oferta (S/)">
-              <input name="precio_oferta_pen" type="number" step="0.01" value={oferta || ""} onChange={(e) => setOferta(Number(e.target.value))} placeholder="Opcional" className="input" />
+              <input name="precio_oferta_pen" type="number" step="0.01" inputMode="decimal" value={oferta || ""} onChange={(e) => setOferta(Number(e.target.value))} placeholder="Opcional" className="input" />
             </Campo>
-            {esAdmin && (
+            {costo > 0 && venta > 0 && (
               <dl className="space-y-1.5 rounded-xl bg-surface-2 p-3 text-sm">
-                <div className="flex justify-between"><dt className="text-muted">Tipo de cambio</dt><dd className="num">{tc.toFixed(3)}</dd></div>
-                <div className="flex justify-between"><dt className="text-muted">Costo total</dt><dd className="num font-semibold">{enSoles(costo)}</dd></div>
                 <div className="flex justify-between"><dt className="text-muted">Utilidad</dt><dd className={`num font-semibold ${utilidad < 0 ? "text-red-600" : "text-green"}`}>{enSoles(utilidad)}</dd></div>
-                <div className="flex justify-between"><dt className="text-muted">Margen</dt><dd className="num font-semibold">{venta ? enPorcentaje(utilidad / venta) : "—"}</dd></div>
+                <div className="flex justify-between"><dt className="text-muted">Margen</dt><dd className="num font-semibold">{enPorcentaje(utilidad / venta)}</dd></div>
               </dl>
             )}
           </div>
         </div>
-        <div className="card space-y-3 p-5">
+        <div className="card p-5">
           <label className="flex items-center justify-between gap-3 text-sm">
             <span><strong>Publicar en la web</strong><span className="block text-xs text-muted">Visible en el catálogo</span></span>
             <input type="checkbox" name="publicado" defaultChecked={unidad?.publicado ?? true} className="size-5 accent-[var(--navy)]" />
           </label>
-          <label className="flex items-center justify-between gap-3 text-sm">
-            <span><strong>Destacado</strong><span className="block text-xs text-muted">Aparece en la portada</span></span>
-            <input type="checkbox" name="destacado" defaultChecked={unidad?.destacado ?? false} className="size-5 accent-[var(--navy)]" />
-          </label>
         </div>
         {estado.error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{estado.error}</p>}
-        {estado.ok && <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{estado.ok}</p>}
-        <button className="btn-primary w-full py-3" disabled={pendiente}>
-          <Save className="size-4" /> {pendiente ? "Guardando…" : unidad ? "Guardar cambios" : "Registrar equipo"}
+        {estado.ok && unidad && <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{estado.ok}</p>}
+        <button className="btn-primary w-full py-3" disabled={ocupado}>
+          {subiendo ? (
+            <><Loader2 className="size-4 animate-spin" /> Subiendo fotos {subiendo.hechas}/{subiendo.total}…</>
+          ) : (
+            <><Save className="size-4" /> {pendiente ? "Guardando…" : unidad ? "Guardar cambios" : "Registrar equipo"}</>
+          )}
         </button>
       </div>
     </form>
+  );
+}
+
+/** Agrega al final de la lista los valores que ya se usaron y no están en las opciones. */
+function conUsados(grupos: [string, string[]][], usados: string[]): [string, string[]][] {
+  const todas = new Set(grupos.flatMap(([, o]) => o));
+  const extra = usados.filter((u) => !todas.has(u)).sort();
+  return extra.length ? [...grupos, ["Usados antes", extra]] : grupos;
+}
+
+/**
+ * Select con opciones fijas y "Otro…" para escribir un valor que no está en la lista.
+ * El valor final se envía en un campo oculto con el nombre indicado.
+ */
+function SelectConOtro({
+  name,
+  inicial,
+  opciones,
+  grupos,
+  placeholder,
+  requerido,
+  tipo = "text",
+}: {
+  name: string;
+  inicial?: string | null;
+  opciones?: [valor: string, texto: string][];
+  grupos?: [string, string[]][];
+  placeholder?: string;
+  requerido?: boolean;
+  tipo?: "text" | "number";
+}) {
+  const valores = useMemo(() => new Set([...(opciones ?? []).map(([v]) => v), ...(grupos ?? []).flatMap(([, o]) => o)]), [opciones, grupos]);
+  const enLista = !inicial || valores.has(inicial);
+  const [eleccion, setEleccion] = useState(enLista ? (inicial ?? "") : "__otro");
+  const [otro, setOtro] = useState(enLista ? "" : (inicial ?? ""));
+  const valor = eleccion === "__otro" ? otro : eleccion;
+
+  return (
+    <div className="space-y-2">
+      <input type="hidden" name={name} value={valor} />
+      <select className="input" value={eleccion} onChange={(e) => setEleccion(e.target.value)} required={requerido}>
+        <option value="">Elige…</option>
+        {opciones?.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+        {grupos?.map(([g, os]) => (
+          <optgroup key={g} label={g}>
+            {os.map((o) => <option key={o} value={o}>{o}</option>)}
+          </optgroup>
+        ))}
+        <option value="__otro">Otro… (escribir)</option>
+      </select>
+      {eleccion === "__otro" && (
+        <input
+          className="input"
+          type={tipo}
+          step={tipo === "number" ? "0.1" : undefined}
+          value={otro}
+          onChange={(e) => setOtro(e.target.value)}
+          placeholder={placeholder}
+          required={requerido}
+          autoFocus
+        />
+      )}
+    </div>
   );
 }
 
@@ -223,11 +332,12 @@ function Seccion({ titulo, nota, children }: { titulo: string; nota?: string; ch
   );
 }
 
-function Campo({ label, className = "", children }: { label: string; className?: string; children: React.ReactNode }) {
+function Campo({ label, nota, className = "", children }: { label: string; nota?: string; className?: string; children: React.ReactNode }) {
   return (
     <div className={className}>
       <span className="label">{label}</span>
       {children}
+      {nota && <p className="mt-1 text-xs text-muted">{nota}</p>}
     </div>
   );
 }

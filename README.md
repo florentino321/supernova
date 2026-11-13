@@ -33,21 +33,20 @@ costo de importación y precio, porque la empresa recibe un solo equipo por mode
 
 **Panel** (`/admin`, requiere sesión)
 - **Dashboard:** ingresos, utilidad, margen, ticket promedio y días para vender, con comparación contra el periodo anterior. Pendientes del día (reservas, interesados y cotizaciones). Gráfico por mes o semana, desglose de ventas en una sola tarjeta (categoría, marca, canal, pago o ciudad), estado y antigüedad del inventario. Filtros de periodo, marca y categoría.
-- **Inventario:** CRUD de equipos con fotos y videos (arrastrar y soltar, ordenar, elegir portada) e historial automático de movimientos. Exporta a CSV.
+- **Inventario:** registro de equipos en una sola pantalla: el modelo y la marca se escriben (o se eligen de los ya registrados, sin pasos previos), la configuración se elige de listas (procesador, RAM, almacenamiento, tarjeta de video, pantalla) con opción "Otro", el precio de adquisición (compra + pasaje + desaduanaje) y las fotos, que se suben al guardar. Código automático, historial de movimientos y exportación a CSV.
 - **Ventas:** registro de ventas (el equipo pasa a "Vendido" solo), nota de venta imprimible o en PDF con garantía y anulación con devolución al stock.
 - **Reservas:** el cliente separa un equipo con adelanto por unos días (por defecto 7, mínimo S/ 100 o 10 % del precio, configurable en `src/lib/empresa.ts`). El equipo figura como "Reservado" en la web; si vence, se libera solo (tarea diaria con `pg_cron`). Al venderlo, la nota de venta descuenta el adelanto.
 - **Cotizaciones:** proformas con uno o varios equipos, imprimibles o en PDF y enviables por WhatsApp. Se convierten en venta con un clic (en una sola transacción).
 - **Interesados:** lista de quienes pidieron aviso desde la web, con mensaje de WhatsApp listo para cuando llega o se libera el equipo.
-- **Importaciones:** lotes con flete en USD, aduana, tipo de cambio y prorrateo automático de gastos por equipo.
-- **Modelos y marcas:** fichas generales, marcas y categorías.
 - **Clientes:** historial de compras y clientes recurrentes.
+- **Configuración:** nombre comercial, razón social, RUC, WhatsApp, teléfono, correo, dirección, horario y redes. Se muestran en la web, en las notas de venta y en las cotizaciones.
 - **Usuarios y vendedores:** el administrador crea cuentas con usuario y contraseña, las edita, cambia contraseñas, activa o desactiva y cambia roles. Muestra las ventas de cada vendedor.
 
 ### Roles
 
 | | Administrador | Vendedor |
 |---|---|---|
-| Dashboard, inventario, fotos, importaciones, modelos, clientes | ✅ | ❌ |
+| Dashboard, inventario, fotos, clientes y configuración | ✅ | ❌ |
 | Registrar ventas (con cliente nuevo o existente) | ✅ | ✅ |
 | Reservas y cotizaciones | Todas | Solo las suyas |
 | Interesados de la web | ✅ | ✅ |
@@ -73,6 +72,7 @@ Los vendedores ingresan con un **usuario** (por ejemplo, `jperez`) y no necesita
    - `20261112000300_roles_y_usuarios.sql`: permisos por rol (admin y vendedor).
    - `20261112000400_codigo_venta_secuencia.sql`: numeración de ventas V-00001…
    - `20261113000000_reservas_avisos_cotizaciones.sql`: reservas con adelanto, avisos y cotizaciones (activa `pg_cron`).
+   - `20261113000100_adquisicion_y_configuracion.sql`: precio de adquisición por equipo y datos de la empresa.
 3. Despliega la Edge Function que crea usuarios. Usa la clave de servicio, que nunca llega al navegador:
    ```bash
    npx supabase functions deploy gestionar-personal --project-ref TU-PROYECTO
@@ -129,4 +129,5 @@ Reglas de negocio implementadas en la base de datos (triggers):
 
 ## Datos de la empresa
 
-El WhatsApp, la dirección, el horario y las redes se editan en `src/lib/empresa.ts`.
+El WhatsApp, el RUC, la dirección, el horario y las redes se editan en el panel, sección **Configuración**.
+Las reglas de reserva (días y adelanto mínimo) están en `src/lib/empresa.ts`.

@@ -1,17 +1,18 @@
 import Link from "next/link";
-import { Mail, MapPin, Menu, MessageCircle, Clock } from "lucide-react";
+import { Clock, Mail, MapPin, Menu, MessageCircle, Phone } from "lucide-react";
 import { Logo } from "@/components/logo";
-import { EMPRESA, enlaceWhatsApp } from "@/lib/empresa";
+import { LEMA, enlaceWhatsApp } from "@/lib/empresa";
+import { obtenerEmpresa } from "@/lib/empresa-datos";
 
 const nav = [
   { href: "/catalogo", texto: "Catálogo" },
-  { href: "/catalogo?condicion=remate", texto: "Remates" },
   { href: "/catalogo?oferta=1", texto: "Ofertas" },
   { href: "/catalogo?estado=en_transito", texto: "Llegando pronto" },
   { href: "/#contacto", texto: "Contacto" },
 ];
 
-export default function LayoutTienda({ children }: LayoutProps<"/">) {
+export default async function LayoutTienda({ children }: LayoutProps<"/">) {
+  const e = await obtenerEmpresa();
   return (
     <>
       <div className="bg-navy text-[13px] text-white/75">
@@ -38,7 +39,7 @@ export default function LayoutTienda({ children }: LayoutProps<"/">) {
           </nav>
           <div className="flex items-center gap-2">
             <a
-              href={enlaceWhatsApp("Hola, quiero información sobre sus laptops.")}
+              href={enlaceWhatsApp(e.whatsapp, "Hola, quiero información sobre sus laptops.")}
               target="_blank"
               rel="noreferrer"
               className="btn-accent hidden sm:inline-flex"
@@ -71,31 +72,50 @@ export default function LayoutTienda({ children }: LayoutProps<"/">) {
           <div className="md:col-span-2">
             <Logo claro />
             <p className="mt-4 max-w-sm text-sm leading-relaxed">
-              {EMPRESA.lema}. Cada equipo que ves en la web existe físicamente y tiene su propio número de serie.
+              {LEMA}. Cada equipo que ves en la web existe físicamente y tiene su propio número de serie.
             </p>
           </div>
           <div className="min-w-0 space-y-3 text-sm">
             <p className="font-semibold text-white">Visítanos</p>
-            <p className="flex gap-2">
-              <MapPin className="mt-0.5 size-4 shrink-0" /> {EMPRESA.direccion}, {EMPRESA.ciudad}
-            </p>
-            <p className="flex gap-2">
-              <Clock className="mt-0.5 size-4 shrink-0" /> {EMPRESA.horario}
-            </p>
+            {(e.direccion || e.ciudad) && (
+              <p className="flex gap-2">
+                <MapPin className="mt-0.5 size-4 shrink-0" /> {[e.direccion, e.ciudad].filter(Boolean).join(", ")}
+              </p>
+            )}
+            {e.horario && (
+              <p className="flex gap-2">
+                <Clock className="mt-0.5 size-4 shrink-0" /> {e.horario}
+              </p>
+            )}
           </div>
           <div className="min-w-0 space-y-3 text-sm">
             <p className="font-semibold text-white">Contacto</p>
-            <a className="flex gap-2 hover:text-white" href={enlaceWhatsApp("Hola")} target="_blank" rel="noreferrer">
+            <a className="flex gap-2 hover:text-white" href={enlaceWhatsApp(e.whatsapp, "Hola")} target="_blank" rel="noreferrer">
               <MessageCircle className="mt-0.5 size-4 shrink-0" /> WhatsApp
             </a>
-            <a className="flex min-w-0 gap-2 break-all hover:text-white" href={`mailto:${EMPRESA.email}`}>
-              <Mail className="mt-0.5 size-4 shrink-0" /> {EMPRESA.email}
-            </a>
+            {e.telefono && (
+              <a className="flex gap-2 hover:text-white" href={`tel:${e.telefono.replace(/\s/g, "")}`}>
+                <Phone className="mt-0.5 size-4 shrink-0" /> {e.telefono}
+              </a>
+            )}
+            {e.email && (
+              <a className="flex min-w-0 gap-2 break-all hover:text-white" href={`mailto:${e.email}`}>
+                <Mail className="mt-0.5 size-4 shrink-0" /> {e.email}
+              </a>
+            )}
+            {(e.facebook || e.instagram || e.tiktok) && (
+              <div className="flex gap-3 pt-1">
+                {e.facebook && <a href={e.facebook} target="_blank" rel="noreferrer" className="text-sm font-semibold hover:text-white">Facebook</a>}
+                {e.instagram && <a href={e.instagram} target="_blank" rel="noreferrer" className="text-sm font-semibold hover:text-white">Instagram</a>}
+                {e.tiktok && <a href={e.tiktok} target="_blank" rel="noreferrer" className="text-sm font-semibold hover:text-white">TikTok</a>}
+              </div>
+            )}
           </div>
         </div>
         <div className="border-t border-white/10">
           <p className="mx-auto max-w-7xl px-4 py-5 text-xs text-white/50 sm:px-6">
-            © {new Date().getFullYear()} {EMPRESA.nombre}. Precios en soles, sujetos a disponibilidad de la unidad.
+            © {new Date().getFullYear()} {e.razon_social ?? e.nombre}
+            {e.ruc ? ` · RUC ${e.ruc}` : ""}. Precios en soles, sujetos a disponibilidad de la unidad.
           </p>
         </div>
       </footer>

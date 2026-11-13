@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, BellRing, Boxes, ExternalLink, FileText, HandCoins, Laptop, Plane, Receipt, UserCog, Users } from "lucide-react";
+import { BarChart3, BellRing, ExternalLink, FileText, HandCoins, Laptop, Receipt, Settings, UserCog, Users } from "lucide-react";
 
 const items = [
   { href: "/admin", texto: "Dashboard", icono: BarChart3, exacto: true, soloAdmin: true },
@@ -11,10 +11,9 @@ const items = [
   { href: "/admin/reservas", texto: "Reservas", icono: HandCoins, soloAdmin: false },
   { href: "/admin/cotizaciones", texto: "Cotizaciones", icono: FileText, soloAdmin: false },
   { href: "/admin/interesados", texto: "Interesados", icono: BellRing, soloAdmin: false },
-  { href: "/admin/importaciones", texto: "Importaciones", icono: Plane, soloAdmin: true },
-  { href: "/admin/modelos", texto: "Modelos y marcas", icono: Boxes, soloAdmin: true },
   { href: "/admin/clientes", texto: "Clientes", icono: Users, soloAdmin: true },
   { href: "/admin/usuarios", texto: "Usuarios y vendedores", icono: UserCog, soloAdmin: true },
+  { href: "/admin/configuracion", texto: "Configuración", icono: Settings, soloAdmin: true },
 ];
 
 export function NavAdmin({ esAdmin }: { esAdmin: boolean }) {

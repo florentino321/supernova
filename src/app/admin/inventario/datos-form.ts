@@ -1,24 +1,25 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Lote, Modelo, Unidad } from "@/lib/tipos";
+import type { Categoria, Marca } from "@/lib/tipos";
 
-/** Datos que necesita el formulario de equipos (modelos, lotes y plantillas por modelo). */
+export type ModeloSugerido = { id: number; nombre: string; marca: string; categoria_id: number };
+
+/** Datos para el formulario de equipos: modelos ya registrados, marcas, categorías y valores usados antes. */
 export async function datosFormulario(supabase: SupabaseClient) {
-  const [{ data: modelos }, { data: lotes }, { data: ultimas }] = await Promise.all([
-    supabase.from("modelos").select("*, marcas(id, nombre, slug)").order("nombre"),
-    supabase.from("lotes").select("*").order("fecha_compra", { ascending: false }),
-    supabase
-      .from("unidades")
-      .select("modelo_id, procesador, ram_gb, ram_tipo, almacenamiento_gb, almacenamiento, gpu, pantalla_pulg, pantalla_detalle, color, sistema")
-      .order("creado_en", { ascending: false }),
+  const [{ data: modelos }, { data: marcas }, { data: categorias }, { data: usados }] = await Promise.all([
+    supabase.from("modelos").select("id, nombre, categoria_id, marcas(nombre)").order("nombre"),
+    supabase.from("marcas").select("*").order("nombre"),
+    supabase.from("categorias").select("*").order("id"),
+    supabase.from("unidades").select("procesador, gpu").limit(1000),
   ]);
-  const vistos = new Set<number>();
-  const plantillas = (ultimas ?? []).filter((u) => (vistos.has(u.modelo_id) ? false : (vistos.add(u.modelo_id), true)));
-  const ordenados = ((modelos ?? []) as Modelo[]).sort(
-    (a, b) => (a.marcas?.nombre ?? "").localeCompare(b.marcas?.nombre ?? "") || a.nombre.localeCompare(b.nombre),
-  );
   return {
-    modelos: ordenados,
-    lotes: (lotes ?? []) as Lote[],
-    plantillas: plantillas as (Partial<Unidad> & { modelo_id: number })[],
+    modelos: ((modelos ?? []) as unknown as { id: number; nombre: string; categoria_id: number; marcas: { nombre: string } | null }[]).map(
+      (m): ModeloSugerido => ({ id: m.id, nombre: m.nombre, marca: m.marcas?.nombre ?? "", categoria_id: m.categoria_id }),
+    ),
+    marcas: (marcas ?? []) as Marca[],
+    categorias: (categorias ?? []) as Categoria[],
+    procesadoresUsados: [...new Set((usados ?? []).map((u) => u.procesador).filter(Boolean))] as string[],
+    gpusUsadas: [...new Set((usados ?? []).map((u) => u.gpu).filter(Boolean))] as string[],
   };
 }
+
+export type DatosFormulario = Awaited<ReturnType<typeof datosFormulario>>;

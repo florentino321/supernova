@@ -6,6 +6,7 @@ import { TarjetaEquipo } from "@/components/tarjeta-equipo";
 import { obtenerCatalogo, obtenerEquipo } from "@/lib/catalogo";
 import { enSoles, etiquetaCondicion } from "@/lib/formato";
 import { RESERVA, adelantoSugerido, enlaceWhatsApp } from "@/lib/empresa";
+import { obtenerEmpresa } from "@/lib/empresa-datos";
 import { URL_SITIO } from "@/lib/sitio";
 import { FormAviso } from "./form-aviso";
 import { Galeria } from "./galeria";
@@ -37,7 +38,7 @@ export default async function Equipo({ params }: PageProps<"/equipo/[slug]">) {
   const u = await obtenerEquipo(slug);
   if (!u) notFound();
 
-  const { unidades } = await obtenerCatalogo();
+  const [{ unidades }, { whatsapp }] = await Promise.all([obtenerCatalogo(), obtenerEmpresa()]);
   const enVenta = unidades.filter((x) => x.id !== u.id && x.estado !== "vendido");
   const otrasConfig = enVenta.filter((x) => x.modelo_id === u.modelo_id);
   const relacionados = enVenta
@@ -49,6 +50,14 @@ export default async function Equipo({ params }: PageProps<"/equipo/[slug]">) {
   const precio = Number(u.precio_oferta_pen ?? u.precio_pen);
   const vendible = u.estado === "disponible" || u.estado === "en_transito";
   const adelanto = adelantoSugerido(precio);
+  // si no hay descripción escrita, se arma una a partir de la ficha técnica
+  const textoDescripcion =
+    u.descripcion ??
+    u.modelos?.descripcion ??
+    `${nombre} ${etiquetaCondicion[u.condicion].toLowerCase()}, importada de Estados Unidos y revisada en nuestro taller. ` +
+      `Cuenta con procesador ${u.procesador}, ${u.ram_gb} GB de RAM, ${u.almacenamiento}` +
+      `${u.gpu ? (/^gráficos integrados/i.test(u.gpu) ? ` y ${u.gpu.toLowerCase()}` : ` y tarjeta de video ${u.gpu}`) : ""}, con pantalla de ${u.pantalla_pulg}″. ` +
+      `Se entrega con ${u.garantia_meses} meses de garantía.`;
   const mensajeReserva = `Hola, quiero separar la ${nombre} (${u.sku})${u.estado === "en_transito" ? " que está en camino" : ""} con un adelanto de ${enSoles(adelanto)}. ¿Cómo hago el pago?`;
 
   // Datos estructurados para Google (precio, disponibilidad y condición en los resultados de búsqueda)
@@ -58,7 +67,7 @@ export default async function Equipo({ params }: PageProps<"/equipo/[slug]">) {
     name: nombre,
     sku: u.sku,
     brand: { "@type": "Brand", name: marca },
-    description: u.descripcion ?? u.modelos?.descripcion ?? undefined,
+    description: textoDescripcion,
     image: (u.medios ?? []).filter((m) => m.tipo === "imagen").map((m) => m.url),
     offers: {
       "@type": "Offer",
@@ -146,12 +155,12 @@ export default async function Equipo({ params }: PageProps<"/equipo/[slug]">) {
             {vendible ? (
               <>
                 {u.estado === "disponible" && (
-                  <a href={enlaceWhatsApp(mensaje)} target="_blank" rel="noreferrer" className="btn-accent mt-5 w-full py-3 text-base">
+                  <a href={enlaceWhatsApp(whatsapp, mensaje)} target="_blank" rel="noreferrer" className="btn-accent mt-5 w-full py-3 text-base">
                     <MessageCircle className="size-5" /> Comprar por WhatsApp
                   </a>
                 )}
                 <a
-                  href={enlaceWhatsApp(mensajeReserva)}
+                  href={enlaceWhatsApp(whatsapp, mensajeReserva)}
                   target="_blank"
                   rel="noreferrer"
                   className={u.estado === "en_transito" ? "btn-accent mt-5 w-full py-3 text-base" : "btn-ghost mt-2 w-full py-3"}
@@ -166,7 +175,7 @@ export default async function Equipo({ params }: PageProps<"/equipo/[slug]">) {
               </>
             ) : (
               <a
-                href={enlaceWhatsApp(`Hola, vi la ${nombre} pero ya no está disponible. ¿Tienen algo similar?`)}
+                href={enlaceWhatsApp(whatsapp, `Hola, vi la ${nombre} pero ya no está disponible. ¿Tienen algo similar?`)}
                 target="_blank"
                 rel="noreferrer"
                 className="btn-primary mt-5 w-full py-3 text-base"
@@ -217,7 +226,7 @@ export default async function Equipo({ params }: PageProps<"/equipo/[slug]">) {
         </section>
         <section>
           <h2 className="font-display text-2xl font-extrabold">Descripción</h2>
-          <p className="mt-4 leading-relaxed text-ink-2">{u.descripcion ?? u.modelos?.descripcion}</p>
+          <p className="mt-4 leading-relaxed text-ink-2">{textoDescripcion}</p>
           <h3 className="mt-6 font-semibold">Incluye</h3>
           <ul className="mt-2 space-y-1.5 text-sm text-ink-2">
             {["Cargador original", "Limpieza interna y pasta térmica nueva", "Windows activado y programas básicos", "Comprobante con número de serie"].map((t) => (

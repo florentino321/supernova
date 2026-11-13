@@ -123,7 +123,7 @@ export function TablaInventario({
         <div className="flex flex-wrap gap-2 border-b border-line p-3">
           <div className="relative min-w-56 flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
-            <input className="input pl-9" placeholder="Buscar por SKU, serie, modelo, procesador, lote…" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input className="input pl-9" placeholder="Buscar por código, modelo o procesador…" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           <select className="input w-auto" value={marca} onChange={(e) => setMarca(e.target.value)}>
             <option value="">Todas las marcas</option>

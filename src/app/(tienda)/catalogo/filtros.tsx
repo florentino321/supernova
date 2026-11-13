@@ -74,7 +74,6 @@ export function Filtros({ marcas, categorias }: { marcas: Marca[]; categorias: C
           ["nuevo", "Nuevo"],
           ["open_box", "Open box"],
           ["seminuevo", "Seminuevo certificado"],
-          ["remate", "Remate"],
         ].map(([v, t]) => (
           <Opcion key={v} activo={params.get("condicion") === v} onClick={() => set("condicion", params.get("condicion") === v ? null : v)}>
             {t}
@@ -117,7 +116,7 @@ export function Filtros({ marcas, categorias }: { marcas: Marca[]; categorias: C
           checked={params.get("oferta") === "1"}
           onChange={(e) => set("oferta", e.target.checked ? "1" : null)}
         />
-        Solo ofertas y remates
+        Solo ofertas
       </label>
 
       {activos.length > 0 && (

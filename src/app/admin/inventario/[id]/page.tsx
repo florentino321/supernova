@@ -25,7 +25,7 @@ export default async function DetalleEquipo({ params, searchParams }: PageProps<
   const sp = await searchParams;
   const { supabase, esAdmin } = await requerirAdmin();
   const [{ data: u }, { data: medios }, { data: movimientos }, { data: ventas }, datos, { count: interesados }] = await Promise.all([
-    supabase.from("unidades").select("*, modelos(*, marcas(*), categorias(*)), lotes(*)").eq("id", id).maybeSingle(),
+    supabase.from("unidades").select("*, modelos(*, marcas(*), categorias(*))").eq("id", id).maybeSingle(),
     supabase.from("medios").select("*").eq("unidad_id", id).order("posicion"),
     supabase.from("movimientos").select("*").eq("unidad_id", id).order("creado_en", { ascending: false }),
     supabase.from("ventas").select("*, clientes(nombre)").eq("unidad_id", id).order("fecha", { ascending: false }),
@@ -51,7 +51,6 @@ export default async function DetalleEquipo({ params, searchParams }: PageProps<
               <span className="font-mono">{unidad.sku}</span>
               {unidad.serie && <> · Serie <span className="font-mono">{unidad.serie}</span></>} · Ingresó el {fecha(unidad.ingresado_en)} (
               {diasEntre(unidad.ingresado_en)} días)
-              {unidad.lotes && <> · Lote <Link className="text-blue hover:underline" href={`/admin/importaciones/${unidad.lotes.id}`}>{unidad.lotes.codigo}</Link></>}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -72,7 +71,12 @@ export default async function DetalleEquipo({ params, searchParams }: PageProps<
       <div className="space-y-8 p-4 sm:p-8">
         {sp.creado && (
           <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-            Equipo registrado. Ahora sube sus fotos y videos.
+            Equipo {unidad.sku} registrado{(medios ?? []).length ? ` con ${(medios ?? []).length} foto(s)` : ". Puedes agregar fotos y videos abajo"}.
+          </p>
+        )}
+        {sp.fallidas && (
+          <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {sp.fallidas} archivo(s) no se pudieron subir. Vuelve a intentarlo en &quot;Fotos y videos&quot;.
           </p>
         )}
 
@@ -99,7 +103,7 @@ export default async function DetalleEquipo({ params, searchParams }: PageProps<
           <GestorMedios unidadId={unidad.id} medios={(medios ?? []) as Medio[]} />
         </section>
 
-        <FormUnidad unidad={unidad} {...datos} esAdmin={esAdmin} />
+        <FormUnidad unidad={unidad} {...datos} />
 
         <section className="card p-5">
           <h2 className="flex items-center gap-2 font-display text-lg font-bold"><History className="size-5" /> Historial de movimientos</h2>

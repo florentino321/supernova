@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { obtenerSesion } from "@/lib/sesion";
-import { EMPRESA, whatsappDe } from "@/lib/empresa";
+import { whatsappDe } from "@/lib/empresa";
+import { obtenerEmpresa } from "@/lib/empresa-datos";
+import { DatosEmisor } from "@/components/datos-emisor";
 import { estadoCotizacion, totalCotizacion } from "@/lib/cotizaciones";
 import { enSoles, etiquetaCondicion, fecha } from "@/lib/formato";
 import type { Cotizacion } from "@/lib/tipos";
@@ -15,13 +17,14 @@ export default async function DetalleCotizacion({ params, searchParams }: PagePr
   const { id } = await params;
   const sp = await searchParams;
   const { supabase } = await obtenerSesion();
-  const [{ data }, { data: ventas }] = await Promise.all([
+  const [{ data }, { data: ventas }, empresa] = await Promise.all([
     supabase
       .from("cotizaciones")
       .select("*, clientes(*), perfiles(nombre), cotizacion_items(*, unidades(id, sku, slug, procesador, ram_gb, ram_tipo, almacenamiento, gpu, pantalla_pulg, pantalla_detalle, condicion, grado, garantia_meses, estado, modelos(nombre, marcas(nombre))))")
       .eq("id", id)
       .maybeSingle(),
     supabase.from("ventas").select("id, codigo").eq("cotizacion_id", id),
+    obtenerEmpresa(),
   ]);
   if (!data) notFound();
   const c = data as unknown as Cotizacion;
@@ -72,7 +75,7 @@ export default async function DetalleCotizacion({ params, searchParams }: PagePr
           <div className="flex flex-wrap items-start justify-between gap-6 border-b border-line pb-6">
             <div>
               <Logo />
-              <p className="mt-3 text-sm text-muted">{EMPRESA.direccion}<br />{EMPRESA.ciudad} · {EMPRESA.email}</p>
+              <DatosEmisor e={empresa} />
             </div>
             <div className="text-right">
               <p className="text-xs font-semibold uppercase tracking-widest text-muted">Cotización</p>

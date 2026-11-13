@@ -3,11 +3,12 @@
 import { revalidatePath, updateTag } from "next/cache";
 import { TAG_CATALOGO } from "@/lib/catalogo";
 import { redirect } from "next/navigation";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { obtenerSesion, requerirAdmin } from "@/lib/sesion";
 import { slugificar } from "@/lib/formato";
 import type { EstadoUnidad, TipoMedia } from "@/lib/tipos";
 
-export type Resultado = { error?: string; ok?: string };
+export type Resultado = { error?: string; ok?: string; id?: number };
 
 const txt = (f: FormData, k: string) => {
   const v = String(f.get(k) ?? "").trim();
@@ -27,68 +28,122 @@ const refrescar = () => {
 // =====================================================================
 // UNIDADES (equipos del inventario)
 // =====================================================================
+/** "512 GB SSD + 1 TB HDD" → 1536 (GB totales, para ordenar y filtrar). */
+function gbDe(texto: string) {
+  let total = 0;
+  for (const m of texto.matchAll(/(\d+(?:[.,]\d+)?)\s*(TB|GB)/gi)) total += Number(m[1].replace(",", ".")) * (m[2].toUpperCase() === "TB" ? 1024 : 1);
+  return Math.round(total) || 256;
+}
+/** Escapa los comodines de LIKE (% y _) para buscar el texto exacto. */
+const sinComodines = (t: string) => t.replace(/[\\%_]/g, (c) => `\\${c}`);
+const tituloDe = (t: string) => t.trim().replace(/\s+/g, " ");
+
+/** Busca la marca por nombre (sin importar mayúsculas) o la crea. */
+async function marcaPorNombre(supabase: SupabaseClient, nombre: string) {
+  const limpio = tituloDe(nombre);
+  // "huawei" → "Huawei"; si ya trae mayúsculas (HP, MSI, ASUS) se respeta
+  const n = /\p{Lu}/u.test(limpio) ? limpio : limpio.replace(/(^|\s)(\p{L})/gu, (_, e, c: string) => e + c.toUpperCase());
+  const { data } = await supabase.from("marcas").select("id").ilike("nombre", sinComodines(n)).limit(1).maybeSingle();
+  if (data) return data.id as number;
+  const slug = slugificar(n);
+  const { data: nueva, error } = await supabase.from("marcas").insert({ nombre: n, slug }).select("id").single();
+  if (!error) return nueva.id as number;
+  const { data: porSlug } = await supabase.from("marcas").select("id").eq("slug", slug).maybeSingle();
+  if (porSlug) return porSlug.id as number;
+  throw new Error(error.message);
+}
+
+/** Busca el modelo por nombre dentro de la marca o lo crea (ya no hay que registrarlo aparte). */
+async function modeloPorNombre(supabase: SupabaseClient, nombre: string, marcaId: number, categoriaId: number) {
+  const n = tituloDe(nombre);
+  const { data } = await supabase
+    .from("modelos")
+    .select("id, categoria_id")
+    .eq("marca_id", marcaId)
+    .ilike("nombre", sinComodines(n))
+    .limit(1)
+    .maybeSingle();
+  if (data) {
+    if (data.categoria_id !== categoriaId) await supabase.from("modelos").update({ categoria_id: categoriaId }).eq("id", data.id);
+    return data.id as number;
+  }
+  const base = slugificar(n) || "laptop";
+  for (let i = 0; i < 20; i++) {
+    const slug = i ? `${base}-${i + 1}` : base;
+    const { data: nuevo, error } = await supabase
+      .from("modelos")
+      .insert({ nombre: n, slug, marca_id: marcaId, categoria_id: categoriaId })
+      .select("id")
+      .single();
+    if (!error) return nuevo.id as number;
+    if (!error.message.includes("duplicate")) throw new Error(error.message);
+  }
+  throw new Error("No se pudo registrar el modelo.");
+}
+
 export async function guardarUnidad(_: Resultado, f: FormData): Promise<Resultado> {
   const { supabase } = await requerirAdmin(); // solo administrador
   const id = num(f, "id");
-  const modeloId = num(f, "modelo_id");
-  if (!modeloId) return { error: "Elige el modelo del equipo." };
+  const nombreModelo = txt(f, "modelo");
+  const nombreMarca = txt(f, "marca");
+  const categoriaId = num(f, "categoria_id");
+  if (!nombreModelo) return { error: "Escribe el modelo del equipo (por ejemplo, Dell Latitude 5420)." };
+  if (!nombreMarca) return { error: "Escribe o elige la marca." };
+  if (!categoriaId) return { error: "Elige la categoría." };
+  const procesador = txt(f, "procesador");
+  if (!procesador) return { error: "Elige el procesador." };
+  const almacenamiento = txt(f, "almacenamiento");
+  if (!almacenamiento) return { error: "Elige el almacenamiento." };
   const precio = num(f, "precio_pen");
   if (!precio || precio <= 0) return { error: "Ingresa un precio de venta válido." };
   const oferta = num(f, "precio_oferta_pen");
   if (oferta !== null && oferta >= precio) return { error: "El precio de oferta debe ser menor al precio normal." };
+  const adquisicion = num(f, "costo_adquisicion_pen");
+  if (adquisicion !== null && adquisicion < 0) return { error: "El precio de adquisición no puede ser negativo." };
 
-  let sku = txt(f, "sku");
-  if (!sku) {
-    const { data } = await supabase.from("unidades").select("sku").like("sku", "LA-%").order("sku", { ascending: false }).limit(1);
-    const ultimo = Number(data?.[0]?.sku?.slice(3) ?? 1000);
-    sku = `LA-${ultimo + 1}`;
+  let modeloId: number;
+  try {
+    const marcaId = await marcaPorNombre(supabase, nombreMarca);
+    modeloId = await modeloPorNombre(supabase, nombreModelo, marcaId, categoriaId);
+  } catch (e) {
+    return { error: traducirError((e as Error).message) };
   }
-  const { data: modelo } = await supabase.from("modelos").select("nombre").eq("id", modeloId).single();
 
   const datos = {
     modelo_id: modeloId,
-    lote_id: num(f, "lote_id"),
-    sku,
-    serie: txt(f, "serie"),
-    procesador: txt(f, "procesador") ?? "",
+    procesador,
     ram_gb: num(f, "ram_gb") ?? 8,
-    ram_tipo: txt(f, "ram_tipo"),
-    almacenamiento_gb: num(f, "almacenamiento_gb") ?? 256,
-    almacenamiento: txt(f, "almacenamiento") ?? `${num(f, "almacenamiento_gb") ?? 256} GB SSD`,
+    almacenamiento,
+    almacenamiento_gb: gbDe(almacenamiento),
     gpu: txt(f, "gpu"),
     pantalla_pulg: num(f, "pantalla_pulg") ?? 15.6,
-    pantalla_detalle: txt(f, "pantalla_detalle"),
-    color: txt(f, "color"),
-    sistema: txt(f, "sistema"),
     condicion: txt(f, "condicion") ?? "seminuevo",
     grado: txt(f, "grado") ?? "A",
     garantia_meses: num(f, "garantia_meses") ?? 12,
-    costo_usd: num(f, "costo_usd") ?? 0,
-    costo_extra_pen: num(f, "costo_extra_pen") ?? 0,
+    costo_adquisicion_pen: adquisicion,
     precio_pen: precio,
     precio_oferta_pen: oferta,
     estado: (txt(f, "estado") ?? "disponible") as EstadoUnidad,
     publicado: f.get("publicado") === "on",
-    destacado: f.get("destacado") === "on",
-    descripcion: txt(f, "descripcion"),
-    notas_internas: txt(f, "notas_internas"),
     ingresado_en: txt(f, "ingresado_en") ?? new Date().toISOString().slice(0, 10),
   };
-  if (!datos.procesador) return { error: "Indica el procesador." };
 
-  let nuevoId = id;
   if (id) {
     const { error } = await supabase.from("unidades").update(datos).eq("id", id);
     if (error) return { error: traducirError(error.message) };
-  } else {
-    const slug = `${slugificar(modelo?.nombre ?? "laptop")}-${slugificar(sku)}`;
-    const { data, error } = await supabase.from("unidades").insert({ ...datos, slug }).select("id").single();
-    if (error) return { error: traducirError(error.message) };
-    nuevoId = data.id;
+    refrescar();
+    return { ok: "Cambios guardados." };
   }
+
+  // código correlativo LA-1001, LA-1002…
+  const { data: ult } = await supabase.from("unidades").select("sku").like("sku", "LA-%").order("sku", { ascending: false }).limit(1);
+  const sku = `LA-${Number(ult?.[0]?.sku?.slice(3) ?? 1000) + 1}`;
+  const slug = `${slugificar(nombreModelo)}-${slugificar(sku)}`;
+  const { data, error } = await supabase.from("unidades").insert({ ...datos, sku, slug }).select("id").single();
+  if (error) return { error: traducirError(error.message) };
   refrescar();
-  if (!id) redirect(`/admin/inventario/${nuevoId}?creado=1`);
-  return { ok: "Cambios guardados." };
+  // el formulario sube las fotos elegidas y luego abre la ficha del equipo
+  return { ok: `Equipo ${sku} registrado.`, id: data.id };
 }
 
 export async function cambiarEstadoUnidad(id: number, estado: EstadoUnidad) {
@@ -164,134 +219,6 @@ export async function eliminarMedio(medioId: number): Promise<Resultado> {
   }
   refrescar();
   return { ok: "Eliminado." };
-}
-
-// =====================================================================
-// MODELOS, MARCAS Y CATEGORÍAS
-// =====================================================================
-export async function guardarModelo(_: Resultado, f: FormData): Promise<Resultado> {
-  const { supabase } = await requerirAdmin(); // solo administrador
-  const id = num(f, "id");
-  const nombre = txt(f, "nombre");
-  if (!nombre) return { error: "Escribe el nombre del modelo." };
-  const datos = {
-    nombre,
-    marca_id: num(f, "marca_id"),
-    categoria_id: num(f, "categoria_id"),
-    anio: num(f, "anio"),
-    descripcion: txt(f, "descripcion"),
-  };
-  if (!datos.marca_id || !datos.categoria_id) return { error: "Elige marca y categoría." };
-  const { error } = id
-    ? await supabase.from("modelos").update(datos).eq("id", id)
-    : await supabase.from("modelos").insert({ ...datos, slug: slugificar(nombre) });
-  if (error) return { error: traducirError(error.message) };
-  refrescar();
-  return { ok: id ? "Modelo actualizado." : "Modelo creado." };
-}
-
-export async function eliminarModelo(id: number): Promise<Resultado> {
-  const { supabase, esAdmin } = await obtenerSesion();
-  if (!esAdmin) return { error: "Solo un administrador puede eliminar modelos." };
-  const { error } = await supabase.from("modelos").delete().eq("id", id);
-  if (error) return { error: "No se puede eliminar: hay equipos registrados con este modelo." };
-  refrescar();
-  return { ok: "Modelo eliminado." };
-}
-
-export async function guardarMarca(_: Resultado, f: FormData): Promise<Resultado> {
-  const { supabase } = await requerirAdmin(); // solo administrador
-  const nombre = txt(f, "nombre");
-  if (!nombre) return { error: "Escribe el nombre de la marca." };
-  const { error } = await supabase.from("marcas").insert({ nombre, slug: slugificar(nombre) });
-  if (error) return { error: traducirError(error.message) };
-  refrescar();
-  return { ok: `Marca ${nombre} agregada.` };
-}
-
-export async function guardarCategoria(_: Resultado, f: FormData): Promise<Resultado> {
-  const { supabase } = await requerirAdmin(); // solo administrador
-  const nombre = txt(f, "nombre");
-  if (!nombre) return { error: "Escribe el nombre de la categoría." };
-  const { error } = await supabase
-    .from("categorias")
-    .insert({ nombre, slug: slugificar(nombre), descripcion: txt(f, "descripcion") });
-  if (error) return { error: traducirError(error.message) };
-  refrescar();
-  return { ok: `Categoría ${nombre} agregada.` };
-}
-
-// =====================================================================
-// IMPORTACIONES (lotes)
-// =====================================================================
-export async function guardarLote(_: Resultado, f: FormData): Promise<Resultado> {
-  const { supabase } = await requerirAdmin(); // solo administrador
-  const id = num(f, "id");
-  const codigo = txt(f, "codigo");
-  const proveedor = txt(f, "proveedor");
-  const fechaCompra = txt(f, "fecha_compra");
-  if (!codigo || !proveedor || !fechaCompra) return { error: "Código, proveedor y fecha de compra son obligatorios." };
-  const datos = {
-    codigo,
-    proveedor,
-    origen: txt(f, "origen") ?? "Miami, FL",
-    courier: txt(f, "courier"),
-    fecha_compra: fechaCompra,
-    fecha_llegada: txt(f, "fecha_llegada"),
-    flete_usd: num(f, "flete_usd") ?? 0,
-    aduana_pen: num(f, "aduana_pen") ?? 0,
-    tipo_cambio: num(f, "tipo_cambio") ?? 3.75,
-    estado: txt(f, "estado") ?? "comprado",
-    notas: txt(f, "notas"),
-  };
-  if (id) {
-    const { error } = await supabase.from("lotes").update(datos).eq("id", id);
-    if (error) return { error: traducirError(error.message) };
-    // al recibir el lote, los equipos en tránsito pasan a disponibles
-    if (datos.estado === "recibido") {
-      await supabase
-        .from("unidades")
-        .update({ estado: "disponible", ingresado_en: datos.fecha_llegada ?? new Date().toISOString().slice(0, 10) })
-        .eq("lote_id", id)
-        .eq("estado", "en_transito");
-    }
-    refrescar();
-    return { ok: "Importación actualizada." };
-  }
-  const { data, error } = await supabase.from("lotes").insert(datos).select("id").single();
-  if (error) return { error: traducirError(error.message) };
-  refrescar();
-  redirect(`/admin/importaciones/${data.id}`);
-}
-
-/** Reparte flete y aduana del lote entre sus equipos, en proporción a su costo de compra. */
-export async function prorratearLote(loteId: number): Promise<Resultado> {
-  const { supabase } = await requerirAdmin(); // solo administrador
-  const { data: lote } = await supabase.from("lotes").select("*").eq("id", loteId).single();
-  const { data: unidades } = await supabase.from("unidades").select("id, costo_usd").eq("lote_id", loteId);
-  if (!lote || !unidades?.length) return { error: "El lote no tiene equipos asignados." };
-  const totalUsd = unidades.reduce((a, u) => a + Number(u.costo_usd), 0) || unidades.length;
-  const gastos = Number(lote.flete_usd) * Number(lote.tipo_cambio) + Number(lote.aduana_pen);
-  await Promise.all(
-    unidades.map((u) => {
-      const peso = totalUsd ? (Number(u.costo_usd) || 1) / totalUsd : 1 / unidades.length;
-      return supabase
-        .from("unidades")
-        .update({ costo_extra_pen: Math.round(gastos * peso * 100) / 100 })
-        .eq("id", u.id);
-    }),
-  );
-  refrescar();
-  return { ok: `Se repartieron S/ ${gastos.toFixed(2)} de gastos entre ${unidades.length} equipos.` };
-}
-
-export async function eliminarLote(id: number): Promise<Resultado> {
-  const { supabase, esAdmin } = await obtenerSesion();
-  if (!esAdmin) return { error: "Solo un administrador puede eliminar importaciones." };
-  const { error } = await supabase.from("lotes").delete().eq("id", id);
-  if (error) return { error: traducirError(error.message) };
-  refrescar();
-  redirect("/admin/importaciones");
 }
 
 // =====================================================================

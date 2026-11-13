@@ -91,7 +91,7 @@ export function GestionUsuarios({ filas, miId }: { filas: FilaUsuario[]; miId: s
       <div className="rounded-2xl bg-surface-2 p-5 text-sm text-ink-2">
         <p className="flex items-center gap-2 font-semibold text-ink"><ShieldCheck className="size-4 text-green" /> Qué puede hacer cada rol</p>
         <ul className="mt-2 grid gap-1 sm:grid-cols-2">
-          <li><strong>Administrador:</strong> dashboard, inventario, fotos y videos, importaciones, modelos, clientes, todas las ventas (incluida la anulación), costos y utilidades, y gestión de usuarios.</li>
+          <li><strong>Administrador:</strong> dashboard, inventario, fotos y videos, clientes, configuración de la empresa, todas las ventas (incluida la anulación), costos y utilidades, y gestión de usuarios.</li>
           <li><strong>Vendedor:</strong> registrar ventas (con cliente nuevo o existente), ver e imprimir solo sus propias ventas. No ve costos, utilidades ni otras secciones.</li>
         </ul>
       </div>

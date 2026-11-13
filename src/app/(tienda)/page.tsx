@@ -4,13 +4,15 @@ import { TarjetaEquipo } from "@/components/tarjeta-equipo";
 import { obtenerCatalogo } from "@/lib/catalogo";
 import { enSolesCorto } from "@/lib/formato";
 import { enlaceWhatsApp } from "@/lib/empresa";
+import { obtenerEmpresa } from "@/lib/empresa-datos";
 
 export default async function Inicio() {
-  const { unidades, categorias } = await obtenerCatalogo();
+  const [{ unidades, categorias }, empresa] = await Promise.all([obtenerCatalogo(), obtenerEmpresa()]);
   const enVenta = unidades.filter((u) => u.estado === "disponible" || u.estado === "reservado");
-  const destacados = enVenta.filter((u) => u.destacado).slice(0, 8);
+  // destacados: los marcados y, si faltan, los ingresos más recientes
+  const destacados = [...enVenta.filter((u) => u.destacado), ...enVenta.filter((u) => !u.destacado)].slice(0, 8);
   const llegando = unidades.filter((u) => u.estado === "en_transito");
-  const remates = enVenta.filter((u) => u.condicion === "remate" || u.precio_oferta_pen != null);
+  const ofertas = enVenta.filter((u) => u.precio_oferta_pen != null);
   const desde = enVenta.length ? Math.min(...enVenta.map((u) => Number(u.precio_oferta_pen ?? u.precio_pen))) : 0;
   const vendidos = unidades.filter((u) => u.estado === "vendido").length;
 
@@ -46,7 +48,7 @@ export default async function Inicio() {
                 {enVenta.length ? `Ver ${enVenta.length} equipos disponibles` : "Ver el catálogo"} <ArrowRight className="size-4" />
               </Link>
               <a
-                href={enlaceWhatsApp("Hola, necesito ayuda para elegir una laptop.")}
+                href={enlaceWhatsApp(empresa.whatsapp, "Hola, necesito ayuda para elegir una laptop.")}
                 target="_blank"
                 rel="noreferrer"
                 className="btn border border-white/20 px-6 py-3 text-base text-white hover:bg-white/10"
@@ -60,7 +62,7 @@ export default async function Inicio() {
               { n: enVenta.length, t: "equipos en tienda hoy" },
               // con el inventario vacío no se muestran cifras en cero
               enVenta.length ? { n: enSolesCorto(desde), t: "precio desde" } : { n: "Cada semana", t: "llegan equipos nuevos" },
-              { n: "12 meses", t: "de garantía (6 en remates)" },
+              { n: "12 meses", t: "de garantía" },
               vendidos >= 10 ? { n: `${vendidos}+`, t: "equipos entregados" } : { n: "100 %", t: "revisadas en taller" },
             ].map((s) => (
               <div key={s.t} className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur">
@@ -131,7 +133,7 @@ export default async function Inicio() {
                 { i: PackageCheck, t: "Selección en EE.UU.", d: "Compramos en outlets, subastas corporativas y vendedores certificados." },
                 { i: Plane, t: "Importación", d: "Llega por courier desde Miami con seguro y trazabilidad del lote." },
                 { i: Wrench, t: "Revisión técnica", d: "Batería, pantalla, teclado, temperatura y limpieza interna con pasta térmica nueva." },
-                { i: ShieldCheck, t: "Entrega con garantía", d: "12 meses de garantía (6 en remates) y envío a todo el Perú." },
+                { i: ShieldCheck, t: "Entrega con garantía", d: "12 meses de garantía y envío a todo el Perú." },
               ].map((p, idx) => (
                 <li key={p.t} className="bg-surface p-6">
                   <div className="flex items-center gap-3">
@@ -149,20 +151,20 @@ export default async function Inicio() {
         </div>
       </section>
 
-      {/* ---------- REMATES / OFERTAS ---------- */}
-      {remates.length > 0 && (
+      {/* ---------- OFERTAS ---------- */}
+      {ofertas.length > 0 && (
         <section className="mx-auto max-w-7xl px-4 pt-20 sm:px-6">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <h2 className="font-display text-3xl font-extrabold">Ofertas y remates</h2>
-              <p className="mt-2 text-muted">Unidades con precio rebajado o pequeños detalles estéticos.</p>
+              <h2 className="font-display text-3xl font-extrabold">Ofertas</h2>
+              <p className="mt-2 text-muted">Unidades con precio rebajado por tiempo limitado.</p>
             </div>
             <Link href="/catalogo?oferta=1" className="hidden text-sm font-semibold text-blue hover:underline sm:block">
               Ver todas →
             </Link>
           </div>
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {remates.slice(0, 4).map((u) => (
+            {ofertas.slice(0, 4).map((u) => (
               <TarjetaEquipo key={u.id} u={u} />
             ))}
           </div>
@@ -191,7 +193,7 @@ export default async function Inicio() {
       <section className="mx-auto max-w-7xl px-4 pt-20 sm:px-6">
         <div className="grid gap-4 md:grid-cols-3">
           {[
-            { i: BadgeCheck, t: "Garantía que responde", d: "12 meses en equipos certificados, 6 meses en remates. Cubre fallas de hardware." },
+            { i: BadgeCheck, t: "Garantía que responde", d: "Hasta 12 meses según el equipo. Cubre fallas de hardware." },
             { i: Truck, t: "Envíos a todo el Perú", d: "Shalom, Olva y agencias. Empaque reforzado y número de seguimiento." },
             { i: ShieldCheck, t: "Número de serie verificable", d: "Cada equipo tiene su serie registrada; la ves en tu comprobante de venta." },
           ].map((b) => (

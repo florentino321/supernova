@@ -104,6 +104,8 @@ export interface Unidad extends UnidadPublica {
   serie: string | null;
   costo_usd: number;
   costo_extra_pen: number;
+  /** Costo total en soles (compra + pasaje + desaduanaje + otros). */
+  costo_adquisicion_pen: number | null;
   notas_internas: string | null;
   creado_en: string;
   actualizado_en: string;

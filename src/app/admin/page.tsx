@@ -18,7 +18,7 @@ export default async function PaginaDashboard() {
       .order("fecha"),
     supabase
       .from("unidades")
-      .select("id, sku, estado, ingresado_en, precio_pen, precio_oferta_pen, costo_usd, costo_extra_pen, condicion, lotes(tipo_cambio), modelos(nombre, marcas(nombre), categorias(nombre))"),
+      .select("id, sku, estado, ingresado_en, precio_pen, precio_oferta_pen, costo_usd, costo_extra_pen, costo_adquisicion_pen, condicion, lotes(tipo_cambio), modelos(nombre, marcas(nombre), categorias(nombre))"),
     supabase.from("reservas").select("adelanto_pen").eq("estado", "activa"),
     supabase.from("avisos").select("id", { count: "exact", head: true }).eq("estado", "pendiente"),
     supabase.from("cotizaciones").select("id", { count: "exact", head: true }).eq("estado", "pendiente").gte("valida_hasta", hoyLima()),
@@ -57,7 +57,7 @@ export default async function PaginaDashboard() {
 
   type U = {
     id: number; sku: string; estado: FilaInventario["estado"]; ingresado_en: string; precio_pen: number; precio_oferta_pen: number | null;
-    costo_usd: number; costo_extra_pen: number; lotes: { tipo_cambio: number } | null;
+    costo_usd: number; costo_extra_pen: number; costo_adquisicion_pen: number | null; lotes: { tipo_cambio: number } | null;
     modelos: { nombre: string; marcas: { nombre: string }; categorias: { nombre: string } };
   };
   const filasInv: FilaInventario[] = ((unidades ?? []) as unknown as U[]).map((u) => ({

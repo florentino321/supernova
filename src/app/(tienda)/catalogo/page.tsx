@@ -23,7 +23,7 @@ export default async function Catalogo({ searchParams }: PageProps<"/catalogo">)
     if (p("condicion") && u.condicion !== p("condicion")) return false;
     if (p("ram") && u.ram_gb < Number(p("ram"))) return false;
     if (p("max") && precioFinal(u) > Number(p("max"))) return false;
-    if (p("oferta") && u.precio_oferta_pen == null && u.condicion !== "remate") return false;
+    if (p("oferta") && u.precio_oferta_pen == null) return false;
     if (q) {
       const texto = [u.modelos?.nombre, u.procesador, u.gpu, u.almacenamiento, u.color, u.modelos?.categorias?.nombre]
         .join(" ")
