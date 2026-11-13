@@ -46,3 +46,6 @@ next-env.d.ts
 
 # respaldos locales de datos
 /respaldos/
+
+.vercel
+.env*

@@ -43,7 +43,7 @@ export default async function Inicio() {
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
               <Link href="/catalogo" className="btn-accent px-6 py-3 text-base">
-                Ver {enVenta.length} equipos disponibles <ArrowRight className="size-4" />
+                {enVenta.length ? `Ver ${enVenta.length} equipos disponibles` : "Ver el catálogo"} <ArrowRight className="size-4" />
               </Link>
               <a
                 href={enlaceWhatsApp("Hola, necesito ayuda para elegir una laptop.")}
@@ -58,9 +58,10 @@ export default async function Inicio() {
           <div className="grid grid-cols-2 gap-3 self-end">
             {[
               { n: enVenta.length, t: "equipos en tienda hoy" },
-              { n: enSolesCorto(desde), t: "precio desde" },
+              // con el inventario vacío no se muestran cifras en cero
+              enVenta.length ? { n: enSolesCorto(desde), t: "precio desde" } : { n: "Cada semana", t: "llegan equipos nuevos" },
               { n: "12 meses", t: "de garantía (6 en remates)" },
-              { n: `${vendidos}+`, t: "equipos entregados" },
+              vendidos >= 10 ? { n: `${vendidos}+`, t: "equipos entregados" } : { n: "100 %", t: "revisadas en taller" },
             ].map((s) => (
               <div key={s.t} className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur">
                 <p className="num font-display text-3xl font-extrabold">{s.n}</p>
