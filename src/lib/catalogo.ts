@@ -1,4 +1,5 @@
-import { crearClienteServidor } from "./supabase/server";
+import { unstable_cache } from "next/cache";
+import { crearClientePublico } from "./supabase/publico";
 import type { Categoria, Marca, UnidadPublica } from "./tipos";
 
 // Columnas sin costos: el público nunca recibe precios de compra.
@@ -8,8 +9,12 @@ export const COLUMNAS_PUBLICAS = `id, modelo_id, sku, slug, procesador, ram_gb, 
   modelos(id, nombre, slug, anio, descripcion, marca_id, categoria_id, marcas(id, nombre, slug), categorias(id, nombre, slug, descripcion)),
   medios(id, unidad_id, tipo, url, ruta, posicion, es_portada)`;
 
-export async function obtenerCatalogo() {
-  const supabase = await crearClienteServidor();
+/** Etiqueta de caché: el panel la invalida al guardar cambios, así la tienda se actualiza al instante. */
+export const TAG_CATALOGO = "catalogo";
+const CACHE = { tags: [TAG_CATALOGO], revalidate: 600 };
+
+export const obtenerCatalogo = unstable_cache(async () => {
+  const supabase = crearClientePublico();
   const [{ data: unidades, error }, { data: marcas }, { data: categorias }] = await Promise.all([
     supabase
       .from("unidades")
@@ -27,10 +32,10 @@ export async function obtenerCatalogo() {
     marcas: (marcas ?? []) as Marca[],
     categorias: (categorias ?? []) as Categoria[],
   };
-}
+}, ["catalogo"], CACHE);
 
-export async function obtenerEquipo(slug: string) {
-  const supabase = await crearClienteServidor();
+export const obtenerEquipo = unstable_cache(async (slug: string) => {
+  const supabase = crearClientePublico();
   const { data } = await supabase
     .from("unidades")
     .select(COLUMNAS_PUBLICAS)
@@ -38,7 +43,7 @@ export async function obtenerEquipo(slug: string) {
     .eq("publicado", true)
     .maybeSingle();
   return data as unknown as UnidadPublica | null;
-}
+}, ["equipo"], CACHE);
 
 export function portada(u: UnidadPublica) {
   const imgs = (u.medios ?? []).filter((m) => m.tipo === "imagen").sort((a, b) => a.posicion - b.posicion);

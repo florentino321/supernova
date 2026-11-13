@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
+import { TAG_CATALOGO } from "@/lib/catalogo";
 import { redirect } from "next/navigation";
 import { obtenerSesion, requerirAdmin } from "@/lib/sesion";
 import { slugificar } from "@/lib/formato";
@@ -19,6 +20,7 @@ const num = (f: FormData, k: string) => {
   return Number.isFinite(n) ? n : null;
 };
 const refrescar = () => {
+  updateTag(TAG_CATALOGO); // la tienda (en caché) muestra el cambio en la siguiente visita
   revalidatePath("/", "layout");
 };
 

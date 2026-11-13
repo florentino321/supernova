@@ -4,7 +4,10 @@ import { cerrarSesion } from "../login/acciones";
 import { NavAdmin } from "./nav-admin";
 import { LogOut } from "lucide-react";
 
-export const metadata = { title: { default: "Panel", template: "%s · Panel Laptops Americanas" } };
+export const metadata = {
+  title: { default: "Panel", template: "%s · Panel Laptops Americanas" },
+  robots: { index: false, follow: false },
+};
 
 export default async function LayoutAdmin({ children }: LayoutProps<"/admin">) {
   const { perfil, esAdmin } = await obtenerSesion();

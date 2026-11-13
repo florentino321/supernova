@@ -1,12 +1,14 @@
 import { requerirAdmin } from "@/lib/sesion";
 import { costoUnidad } from "@/lib/calculos";
+import { hoyLima } from "@/lib/cotizaciones";
 import { Dashboard, type FilaInventario, type FilaVenta } from "./dashboard";
 
 export const metadata = { title: "Dashboard" };
 
 export default async function PaginaDashboard() {
   const { supabase, esAdmin, perfil } = await requerirAdmin();
-  const [{ data: ventas }, { data: unidades }] = await Promise.all([
+  await supabase.rpc("liberar_reservas_vencidas");
+  const [{ data: ventas }, { data: unidades }, { data: reservas }, { count: avisos }, { count: cotizaciones }] = await Promise.all([
     supabase
       .from("ventas")
       .select(
@@ -17,7 +19,16 @@ export default async function PaginaDashboard() {
     supabase
       .from("unidades")
       .select("id, sku, estado, ingresado_en, precio_pen, precio_oferta_pen, costo_usd, costo_extra_pen, condicion, lotes(tipo_cambio), modelos(nombre, marcas(nombre), categorias(nombre))"),
+    supabase.from("reservas").select("adelanto_pen").eq("estado", "activa"),
+    supabase.from("avisos").select("id", { count: "exact", head: true }).eq("estado", "pendiente"),
+    supabase.from("cotizaciones").select("id", { count: "exact", head: true }).eq("estado", "pendiente").gte("valida_hasta", hoyLima()),
   ]);
+  const pendientes = {
+    reservas: reservas?.length ?? 0,
+    adelantos: (reservas ?? []).reduce((a, r) => a + Number(r.adelanto_pen), 0),
+    interesados: avisos ?? 0,
+    cotizaciones: cotizaciones ?? 0,
+  };
 
   type V = {
     id: number; codigo: string; fecha: string; total_pen: number; descuento_pen: number; costo_total_pen: number;
@@ -61,5 +72,5 @@ export default async function PaginaDashboard() {
     categoria: u.modelos?.categorias?.nombre ?? "",
   }));
 
-  return <Dashboard ventas={filasVentas} inventario={filasInv} esAdmin={esAdmin} nombre={perfil.nombre} />;
+  return <Dashboard ventas={filasVentas} inventario={filasInv} esAdmin={esAdmin} nombre={perfil.nombre} pendientes={pendientes} />;
 }

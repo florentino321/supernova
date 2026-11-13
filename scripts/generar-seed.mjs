@@ -1,4 +1,5 @@
 // Genera supabase/seed.sql con datos de demostración realistas (ficticios).
+// Solo para un Supabase LOCAL de desarrollo: el proyecto en la nube arranca sin datos de prueba.
 // Uso: node scripts/generar-seed.mjs
 import { writeFileSync } from "node:fs";
 
@@ -272,66 +273,3 @@ update movimientos m set creado_en = v.fecha + interval '5 days'
 
 writeFileSync(new URL("../supabase/seed.sql", import.meta.url), L.join("\n"));
 console.log(`OK: ${lotes.length} lotes, ${unidades.length} unidades, ${ventas.length} ventas, ${clientes.length} clientes`);
-
-// ---------------------------------------------------------------------
-// Modo --api: carga los mismos datos en el proyecto de Supabase configurado
-// en .env.local, iniciando sesión como el administrador de prueba
-// (credenciales en credenciales-demo.local.txt). Pasa por RLS y triggers.
-// Uso: node scripts/generar-seed.mjs --api
-// ---------------------------------------------------------------------
-if (process.argv.includes("--api")) {
-  const { readFileSync } = await import("node:fs");
-  const { createClient } = await import("@supabase/supabase-js");
-  const env = Object.fromEntries(
-    readFileSync(new URL("../.env.local", import.meta.url), "utf8")
-      .split(/\r?\n/).filter((l) => l.includes("=") && !l.startsWith("#"))
-      .map((l) => [l.slice(0, l.indexOf("=")).trim(), l.slice(l.indexOf("=") + 1).trim()]),
-  );
-  const cred = readFileSync(new URL("../credenciales-demo.local.txt", import.meta.url), "utf8");
-  const usuarioAdmin = cred.match(/Administrador:\s*(\S+)/)[1];
-  // los usuarios del personal se guardan como correo en un dominio interno reservado
-  const email = usuarioAdmin.includes("@") ? usuarioAdmin : `${usuarioAdmin}@personal.laptopsamericanas.invalid`;
-  const password = cred.match(/Administrador:[\s\S]*?Contraseña:\s*(\S+)/)[1];
-  const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-  const { error: eLogin } = await sb.auth.signInWithPassword({ email, password });
-  if (eLogin) throw eLogin;
-  const ins = async (tabla, filas, cols = "*") => {
-    const { data, error } = await sb.from(tabla).insert(filas).select(cols);
-    if (error) throw new Error(`${tabla}: ${error.message}`);
-    return data;
-  };
-  const idMarca = new Map((await ins("marcas", marcas.map((m) => ({ nombre: m, slug: slugify(m) })), "id, nombre")).map((x) => [x.nombre, x.id]));
-  const idCat = new Map((await ins("categorias", categorias.map(([n, d]) => ({ nombre: n, slug: slugify(n), descripcion: d })), "id, nombre")).map((x) => [x.nombre, x.id]));
-  const idModelo = new Map((await ins("modelos", equipos.map((e) => ({
-    marca_id: idMarca.get(e[0]), categoria_id: idCat.get(e[1]), nombre: e[2], slug: slugify(e[2]), anio: e[3],
-    descripcion: `${e[2]} importada de Estados Unidos, revisada y certificada en nuestro taller.`,
-  })), "id, nombre")).map((x) => [x.nombre, x.id]));
-  const idLote = new Map((await ins("lotes", lotes.map((l) => ({
-    codigo: l.codigo, proveedor: l.proveedor, origen: "Miami, FL", courier: l.courier,
-    fecha_compra: iso(l.compra), fecha_llegada: l.llegada ? iso(l.llegada) : null,
-    flete_usd: l.unidades.length * 45, aduana_pen: Math.round(l.unidades.reduce((a, u) => a + u.costoUsd, 0) * l.tc * 0.04),
-    tipo_cambio: l.tc, estado: l.estado,
-  })), "id, codigo")).map((x) => [x.codigo, x.id]));
-  const idUnidad = new Map((await ins("unidades", unidades.map((u) => ({
-    modelo_id: idModelo.get(u.modelo), lote_id: idLote.get(u.lote.codigo), sku: u.sku, serie: u.serie, slug: u.slug,
-    procesador: u.cpu, ram_gb: u.ram, ram_tipo: u.ramTipo, almacenamiento_gb: u.gb, almacenamiento: u.alm, gpu: u.gpu,
-    pantalla_pulg: u.pulg, pantalla_detalle: u.detalle, color: u.color, condicion: u.condicion, grado: u.grado,
-    garantia_meses: u.garantia, costo_usd: u.costoUsd, costo_extra_pen: u.extraPen, precio_pen: u.precio,
-    precio_oferta_pen: u.oferta, estado: u.estado === "vendido" ? "disponible" : u.estado, publicado: true,
-    destacado: u.destacado, ingresado_en: iso(u.ingresado),
-    descripcion: `Equipo ${u.condicion === "nuevo" ? "nuevo en caja" : u.condicion === "open_box" ? "open box (caja abierta, sin uso)" : u.condicion === "remate" ? "en remate con detalles estéticos" : "seminuevo certificado"}. ${u.cpu}, ${u.ram} GB ${u.ramTipo}, ${u.alm}${u.gpu ? `, ${u.gpu}` : ""}. Pantalla ${u.pulg}" ${u.detalle}. Incluye cargador original, limpieza interna, pasta térmica nueva y programas instalados.`,
-  })), "id, sku")).map((x) => [x.sku, x.id]));
-  const idCliente = new Map((await ins("clientes", clientes.map((c) => ({
-    nombre: c.nombre, tipo_doc: c.tipo, num_doc: c.doc, telefono: c.tel, email: c.email, ciudad: c.ciudad,
-  })), "id, num_doc")).map((x) => [x.num_doc, x.id]));
-  await ins("ventas", ventas.map((v, i) => ({
-    codigo: v.codigo, unidad_id: idUnidad.get(v.sku), cliente_id: idCliente.get(v.cliente),
-    vendedor_id: i % 3 === 0 ? "11111111-1111-4111-8111-111111111111" : "22222222-2222-4222-8222-222222222222",
-    fecha: v.fecha.toISOString(), precio_lista_pen: v.precio, descuento_pen: v.descuento, metodo_pago: v.pago, canal: v.canal,
-  })), "id");
-  const { error: eAnul } = await sb.from("ventas")
-    .update({ estado: "anulada", notas: "Cliente devolvió el equipo dentro de los 7 días (cambio de modelo)." })
-    .eq("codigo", anulada.codigo);
-  if (eAnul) throw eAnul;
-  console.log("Carga por API completada. Ejecuta ahora el bloque 'fechas realistas' de supabase/seed.sql en el SQL Editor.");
-}

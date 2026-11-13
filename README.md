@@ -20,12 +20,24 @@ costo de importación y precio, porque la empresa recibe un solo equipo por mode
 **Sitio público**
 - `/`: portada con destacados, categorías, ofertas y equipos en camino.
 - `/catalogo`: filtros por categoría, marca, condición, RAM, precio y búsqueda de texto.
-- `/equipo/[slug]`: ficha con galería de fotos y videos (archivos, YouTube o TikTok), especificaciones, grado estético y compra por WhatsApp.
+- `/equipo/[slug]`: ficha con galería de fotos y videos, especificaciones, grado estético, compra por WhatsApp, botón para **separar con adelanto** y formulario **"Avísame cuando llegue"** (o "si se libera" / "si llega uno similar").
+- Los videos de YouTube cargan su reproductor solo al tocar "play"; los de TikTok se abren en TikTok. Así la ficha carga rápido.
+
+**Optimización y SEO**
+- Vista previa al compartir por WhatsApp o Facebook: imagen generada con la foto, el modelo, el precio y el estado del equipo.
+- `sitemap.xml`, `robots.txt`, descripción por equipo y datos estructurados de producto (schema.org) para Google.
+- Fotos optimizadas con `next/image` (AVIF o WebP según el navegador y tamaño según la pantalla).
+- Las fotos se comprimen en el navegador antes de subirlas (máx. 1600 px, JPEG): de 5 MB pasan a unos 200 KB. Desde el celular se puede tomar la foto directamente con la cámara.
+- Catálogo en caché: la tienda no consulta la base en cada visita; el panel la actualiza al instante al guardar.
+- Páginas propias de error, "no encontrado" y carga.
 
 **Panel** (`/admin`, requiere sesión)
-- **Dashboard:** ingresos, utilidad, margen, ticket promedio y días para vender, con comparación contra el periodo anterior. Gráficos por mes o semana, categoría, marca, canal, método de pago y ciudad; estado y antigüedad del inventario. Filtros de periodo, marca, categoría y canal.
+- **Dashboard:** ingresos, utilidad, margen, ticket promedio y días para vender, con comparación contra el periodo anterior. Pendientes del día (reservas, interesados y cotizaciones). Gráfico por mes o semana, desglose de ventas en una sola tarjeta (categoría, marca, canal, pago o ciudad), estado y antigüedad del inventario. Filtros de periodo, marca y categoría.
 - **Inventario:** CRUD de equipos con fotos y videos (arrastrar y soltar, ordenar, elegir portada) e historial automático de movimientos. Exporta a CSV.
 - **Ventas:** registro de ventas (el equipo pasa a "Vendido" solo), nota de venta imprimible o en PDF con garantía y anulación con devolución al stock.
+- **Reservas:** el cliente separa un equipo con adelanto por unos días (por defecto 7, mínimo S/ 100 o 10 % del precio, configurable en `src/lib/empresa.ts`). El equipo figura como "Reservado" en la web; si vence, se libera solo (tarea diaria con `pg_cron`). Al venderlo, la nota de venta descuenta el adelanto.
+- **Cotizaciones:** proformas con uno o varios equipos, imprimibles o en PDF y enviables por WhatsApp. Se convierten en venta con un clic (en una sola transacción).
+- **Interesados:** lista de quienes pidieron aviso desde la web, con mensaje de WhatsApp listo para cuando llega o se libera el equipo.
 - **Importaciones:** lotes con flete en USD, aduana, tipo de cambio y prorrateo automático de gastos por equipo.
 - **Modelos y marcas:** fichas generales, marcas y categorías.
 - **Clientes:** historial de compras y clientes recurrentes.
@@ -37,6 +49,8 @@ costo de importación y precio, porque la empresa recibe un solo equipo por mode
 |---|---|---|
 | Dashboard, inventario, fotos, importaciones, modelos, clientes | ✅ | ❌ |
 | Registrar ventas (con cliente nuevo o existente) | ✅ | ✅ |
+| Reservas y cotizaciones | Todas | Solo las suyas |
+| Interesados de la web | ✅ | ✅ |
 | Ver ventas | Todas | Solo las suyas |
 | Ver costos, utilidad y márgenes | ✅ | ❌ |
 | Anular ventas | ✅ | ❌ |
@@ -58,6 +72,7 @@ Los vendedores ingresan con un **usuario** (por ejemplo, `jperez`) y no necesita
    - `20261112000200_endurecimiento.sql`: correcciones del linter de Supabase.
    - `20261112000300_roles_y_usuarios.sql`: permisos por rol (admin y vendedor).
    - `20261112000400_codigo_venta_secuencia.sql`: numeración de ventas V-00001…
+   - `20261113000000_reservas_avisos_cotizaciones.sql`: reservas con adelanto, avisos y cotizaciones (activa `pg_cron`).
 3. Despliega la Edge Function que crea usuarios. Usa la clave de servicio, que nunca llega al navegador:
    ```bash
    npx supabase functions deploy gestionar-personal --project-ref TU-PROYECTO
@@ -76,11 +91,20 @@ select id, 'Nombre del administrador', 'admin', 'admin', email from auth.users w
 ```
 Los demás usuarios se crean desde el panel, en **Usuarios y vendedores**. Por seguridad, quien se registre por su cuenta **no** obtiene acceso. Se recomienda además desactivar *Allow new users to sign up* en Supabase > Authentication > Sign In / Providers.
 
-### Datos de demostración (opcional)
-- **Supabase local:** `supabase/seed.sql` (lo genera `node scripts/generar-seed.mjs`). Incluye dos usuarios de prueba solo para desarrollo local.
-- **Proyecto en la nube:** crea un usuario administrador, guarda sus credenciales en `credenciales-demo.local.txt` (ignorado por git) y ejecuta `node scripts/generar-seed.mjs --api`. Los datos se cargan a través de la API, pasando por las reglas de seguridad y los triggers.
+### Datos de demostración
+El proyecto en la nube arranca **sin datos de prueba**: solo con marcas y categorías. Para desarrollar con un Supabase local,
+`node scripts/generar-seed.mjs` genera `supabase/seed.sql` con datos ficticios (13 importaciones, 50 equipos, 30 ventas).
 
-Todos los datos de demostración son ficticios: 13 importaciones, 50 equipos, 30 ventas y 46 clientes.
+## Publicación (Vercel)
+1. En [vercel.com](https://vercel.com), entra con tu cuenta de GitHub e importa el repositorio.
+2. En *Environment Variables* agrega `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY` (los mismos valores de `.env.local`).
+3. *Deploy*. Cada `git push` a `main` vuelve a publicar el sitio solo.
+
+La dirección pública (para el sitemap y las vistas previas) se toma sola del dominio de Vercel. Si usas un dominio propio,
+agrega `NEXT_PUBLIC_SITIO_URL=https://tu-dominio.pe`.
+
+> En el plan gratuito, Supabase pausa el proyecto tras 7 días sin actividad. Antes de una presentación, entra al sitio
+> o al panel de Supabase para reactivarlo.
 
 ## Modelo de datos
 
@@ -90,8 +114,10 @@ marcas ─┐
 categorias ┘              │  │
                           │  └─< medios      (fotos y videos)
                           │  └─< movimientos (historial automático)
-                          └─< ventas >─ clientes
-                                 └── perfiles (vendedor) ── auth.users
+                          ├─< ventas >─ clientes ─< reservas, cotizaciones
+                          ├─< reservas (adelanto)        └─< cotizacion_items >─ unidades
+                          └─< avisos ("Avísame")
+                                 perfiles (vendedor) ── auth.users
 ```
 
 Reglas de negocio implementadas en la base de datos (triggers):

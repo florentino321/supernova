@@ -6,15 +6,23 @@ import { registrarVenta, type Resultado } from "../../acciones";
 import { enSoles, etiquetaCanal, etiquetaPago } from "@/lib/formato";
 import type { Canal, Cliente, MetodoPago, Unidad } from "@/lib/tipos";
 
-export function FormVenta({ unidades, clientes, unidadInicial }: { unidades: Unidad[]; clientes: Cliente[]; unidadInicial: string }) {
+export type ReservaActiva = {
+  unidad_id: number; codigo: string; cliente_id: number | null; precio_acordado_pen: number; adelanto_pen: number;
+  clientes: { nombre: string } | null;
+};
+
+export function FormVenta({ unidades, clientes, unidadInicial, reservas = [] }: { unidades: Unidad[]; clientes: Cliente[]; unidadInicial: string; reservas?: ReservaActiva[] }) {
   const [estado, accion, pendiente] = useActionState<Resultado, FormData>(registrarVenta, {});
   const [unidadId, setUnidadId] = useState(unidadInicial);
   const u = unidades.find((x) => String(x.id) === unidadId);
-  const [precio, setPrecio] = useState(() => (u ? Number(u.precio_oferta_pen ?? u.precio_pen) : 0));
+  const reservaDe = (id: string) => reservas.find((r) => String(r.unidad_id) === id);
+  const reserva = reservaDe(unidadId);
+  const r0 = reservaDe(unidadInicial);
+  const [precio, setPrecio] = useState(() => (r0 ? Number(r0.precio_acordado_pen) : u ? Number(u.precio_oferta_pen ?? u.precio_pen) : 0));
   const [descuento, setDescuento] = useState(0);
   const [modoCliente, setModoCliente] = useState<"existente" | "nuevo">("existente");
   const [buscaCliente, setBuscaCliente] = useState("");
-  const [clienteId, setClienteId] = useState("");
+  const [clienteId, setClienteId] = useState(r0?.cliente_id ? String(r0.cliente_id) : "");
 
   const sugeridos = useMemo(() => {
     const t = buscaCliente.toLowerCase();
@@ -36,7 +44,11 @@ export function FormVenta({ unidades, clientes, unidadInicial }: { unidades: Uni
             onChange={(e) => {
               setUnidadId(e.target.value);
               const n = unidades.find((x) => String(x.id) === e.target.value);
-              if (n) setPrecio(Number(n.precio_oferta_pen ?? n.precio_pen));
+              const r = reservaDe(e.target.value);
+              if (r) {
+                setPrecio(Number(r.precio_acordado_pen));
+                if (r.cliente_id) { setModoCliente("existente"); setClienteId(String(r.cliente_id)); }
+              } else if (n) setPrecio(Number(n.precio_oferta_pen ?? n.precio_pen));
             }}
           >
             <option value="">Elige el equipo vendido…</option>
@@ -50,6 +62,12 @@ export function FormVenta({ unidades, clientes, unidadInicial }: { unidades: Uni
           {u && (
             <p className="mt-3 rounded-xl bg-surface-2 p-3 text-sm text-ink-2">
               {u.modelos?.nombre} · {u.procesador} · Serie <span className="font-mono">{u.serie ?? "—"}</span> · Garantía {u.garantia_meses} meses
+            </p>
+          )}
+          {reserva && (
+            <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+              Reservado por <strong>{reserva.clientes?.nombre ?? "un cliente"}</strong> ({reserva.codigo}) con un adelanto de{" "}
+              <strong>{enSoles(reserva.adelanto_pen)}</strong>. Registra el precio total: la reserva se cerrará con esta venta.
             </p>
           )}
         </section>
@@ -147,9 +165,15 @@ export function FormVenta({ unidades, clientes, unidadInicial }: { unidades: Uni
             <div><span className="label">Precio (S/)</span><input name="precio_lista_pen" type="number" step="0.01" required value={precio || ""} onChange={(e) => setPrecio(Number(e.target.value))} className="input text-lg font-semibold" /></div>
             <div><span className="label">Descuento (S/)</span><input name="descuento_pen" type="number" step="0.01" min={0} value={descuento || ""} onChange={(e) => setDescuento(Number(e.target.value))} className="input" /></div>
             <div className="flex items-end justify-between border-t border-line pt-4">
-              <span className="text-muted">Total a cobrar</span>
+              <span className="text-muted">Total de la venta</span>
               <span className="num font-display text-3xl font-extrabold">{enSoles(Math.max(0, precio - descuento))}</span>
             </div>
+            {reserva && (
+              <div className="flex justify-between rounded-xl bg-surface-2 px-3 py-2 text-sm">
+                <span className="text-muted">Saldo a cobrar hoy (menos adelanto)</span>
+                <span className="num font-semibold">{enSoles(Math.max(0, precio - descuento - Number(reserva.adelanto_pen)))}</span>
+              </div>
+            )}
           </div>
         </div>
         {estado.error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{estado.error}</p>}

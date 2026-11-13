@@ -151,3 +151,60 @@ export interface Movimiento {
   detalle: string | null;
   creado_en: string;
 }
+
+export type EstadoReserva = "activa" | "completada" | "cancelada" | "vencida";
+export interface Reserva {
+  id: number;
+  codigo: string;
+  unidad_id: number;
+  cliente_id: number | null;
+  vendedor_id: string | null;
+  precio_acordado_pen: number;
+  adelanto_pen: number;
+  metodo_pago: MetodoPago;
+  vence_en: string;
+  estado: EstadoReserva;
+  estado_previo: EstadoUnidad | null;
+  venta_id: number | null;
+  notas: string | null;
+  creado_en: string;
+  unidades?: Unidad;
+  clientes?: Cliente | null;
+  perfiles?: Perfil | null;
+}
+
+export type EstadoAviso = "pendiente" | "contactado" | "descartado";
+export interface Aviso {
+  id: number;
+  unidad_id: number | null;
+  nombre: string;
+  telefono: string;
+  mensaje: string | null;
+  estado: EstadoAviso;
+  creado_en: string;
+  unidades?: Pick<Unidad, "id" | "sku" | "slug" | "estado" | "precio_pen" | "precio_oferta_pen"> & { modelos?: Pick<Modelo, "nombre"> };
+}
+
+export type EstadoCotizacion = "pendiente" | "aceptada" | "anulada";
+export interface CotizacionItem {
+  id: number;
+  cotizacion_id: number;
+  unidad_id: number;
+  precio_pen: number;
+  descuento_pen: number;
+  unidades?: Unidad;
+}
+export interface Cotizacion {
+  id: number;
+  codigo: string;
+  cliente_id: number | null;
+  vendedor_id: string | null;
+  fecha: string;
+  valida_hasta: string;
+  estado: EstadoCotizacion;
+  notas: string | null;
+  creado_en: string;
+  clientes?: Cliente | null;
+  perfiles?: Perfil | null;
+  cotizacion_items?: CotizacionItem[];
+}

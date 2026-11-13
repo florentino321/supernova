@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CheckCircle2, ChevronRight, MessageCircle, ShieldCheck, Store, Truck } from "lucide-react";
+import { CheckCircle2, ChevronRight, HandCoins, MessageCircle, ShieldCheck, Store, Truck } from "lucide-react";
 import { ChipCondicion } from "@/components/chips";
 import { TarjetaEquipo } from "@/components/tarjeta-equipo";
 import { obtenerCatalogo, obtenerEquipo } from "@/lib/catalogo";
 import { enSoles, etiquetaCondicion } from "@/lib/formato";
-import { enlaceWhatsApp } from "@/lib/empresa";
+import { RESERVA, adelantoSugerido, enlaceWhatsApp } from "@/lib/empresa";
+import { URL_SITIO } from "@/lib/sitio";
+import { FormAviso } from "./form-aviso";
 import { Galeria } from "./galeria";
 
 const explicacionGrado = {
@@ -17,7 +19,17 @@ const explicacionGrado = {
 export async function generateMetadata({ params }: PageProps<"/equipo/[slug]">) {
   const { slug } = await params;
   const u = await obtenerEquipo(slug);
-  return { title: u?.modelos?.nombre ?? "Equipo" };
+  if (!u) return { title: "Equipo no encontrado" };
+  const nombre = u.modelos?.nombre ?? "Laptop";
+  const precio = Number(u.precio_oferta_pen ?? u.precio_pen);
+  const titulo = `${nombre} · ${u.ram_gb} GB / ${u.almacenamiento}`;
+  const descripcion = `${nombre} con ${u.procesador}, ${u.ram_gb} GB de RAM y ${u.almacenamiento}. ${enSoles(precio)} · ${etiquetaCondicion[u.condicion]} · ${u.garantia_meses} meses de garantía. Importada de EE.UU.`;
+  return {
+    title: titulo,
+    description: descripcion,
+    alternates: { canonical: `/equipo/${u.slug}` },
+    openGraph: { title: `${titulo} · ${enSoles(precio)}`, description: descripcion, url: `/equipo/${u.slug}` },
+  };
 }
 
 export default async function Equipo({ params }: PageProps<"/equipo/[slug]">) {
@@ -36,10 +48,32 @@ export default async function Equipo({ params }: PageProps<"/equipo/[slug]">) {
   const marca = u.modelos?.marcas?.nombre ?? "";
   const precio = Number(u.precio_oferta_pen ?? u.precio_pen);
   const vendible = u.estado === "disponible" || u.estado === "en_transito";
-  const mensaje =
-    u.estado === "en_transito"
-      ? `Hola, quiero separar la ${nombre} (${u.sku}) que está en camino. Precio ${enSoles(precio)}.`
-      : `Hola, me interesa la ${nombre} (${u.sku}) a ${enSoles(precio)}. ¿Sigue disponible?`;
+  const adelanto = adelantoSugerido(precio);
+  const mensajeReserva = `Hola, quiero separar la ${nombre} (${u.sku})${u.estado === "en_transito" ? " que está en camino" : ""} con un adelanto de ${enSoles(adelanto)}. ¿Cómo hago el pago?`;
+
+  // Datos estructurados para Google (precio, disponibilidad y condición en los resultados de búsqueda)
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: nombre,
+    sku: u.sku,
+    brand: { "@type": "Brand", name: marca },
+    description: u.descripcion ?? u.modelos?.descripcion ?? undefined,
+    image: (u.medios ?? []).filter((m) => m.tipo === "imagen").map((m) => m.url),
+    offers: {
+      "@type": "Offer",
+      url: `${URL_SITIO}/equipo/${u.slug}`,
+      priceCurrency: "PEN",
+      price: precio.toFixed(2),
+      itemCondition: u.condicion === "nuevo" ? "https://schema.org/NewCondition" : "https://schema.org/RefurbishedCondition",
+      availability: {
+        disponible: "https://schema.org/InStock",
+        reservado: "https://schema.org/LimitedAvailability",
+        en_transito: "https://schema.org/PreOrder",
+      }[u.estado as string] ?? "https://schema.org/SoldOut",
+    },
+  };
+  const mensaje = `Hola, me interesa la ${nombre} (${u.sku}) a ${enSoles(precio)}. ¿Sigue disponible?`;
 
   const specs: [string, string | null | undefined][] = [
     ["Marca", marca],
@@ -58,6 +92,10 @@ export default async function Equipo({ params }: PageProps<"/equipo/[slug]">) {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\u003c") }}
+      />
       <nav className="flex items-center gap-1 text-sm text-muted">
         <Link href="/catalogo" className="hover:text-ink">Catálogo</Link>
         <ChevronRight className="size-3.5" />
@@ -106,10 +144,26 @@ export default async function Equipo({ params }: PageProps<"/equipo/[slug]">) {
               {otrasConfig.length > 0 ? `; hay ${otrasConfig.length} configuración(es) más de este modelo abajo.` : "."}
             </div>
             {vendible ? (
-              <a href={enlaceWhatsApp(mensaje)} target="_blank" rel="noreferrer" className="btn-accent mt-5 w-full py-3 text-base">
-                <MessageCircle className="size-5" />
-                {u.estado === "en_transito" ? "Separar por WhatsApp" : "Comprar por WhatsApp"}
-              </a>
+              <>
+                {u.estado === "disponible" && (
+                  <a href={enlaceWhatsApp(mensaje)} target="_blank" rel="noreferrer" className="btn-accent mt-5 w-full py-3 text-base">
+                    <MessageCircle className="size-5" /> Comprar por WhatsApp
+                  </a>
+                )}
+                <a
+                  href={enlaceWhatsApp(mensajeReserva)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={u.estado === "en_transito" ? "btn-accent mt-5 w-full py-3 text-base" : "btn-ghost mt-2 w-full py-3"}
+                >
+                  <HandCoins className="size-5" /> Separarla con {enSoles(adelanto)} de adelanto
+                </a>
+                <p className="mt-2 text-center text-xs text-muted">
+                  {u.estado === "en_transito"
+                    ? "Con el adelanto te la guardamos y es tuya apenas llegue."
+                    : `Te la guardamos ${RESERVA.dias} días. El adelanto se descuenta del precio.`}
+                </p>
+              </>
             ) : (
               <a
                 href={enlaceWhatsApp(`Hola, vi la ${nombre} pero ya no está disponible. ¿Tienen algo similar?`)}
@@ -121,6 +175,16 @@ export default async function Equipo({ params }: PageProps<"/equipo/[slug]">) {
               </a>
             )}
           </div>
+
+          {u.estado === "en_transito" && (
+            <FormAviso unidadId={u.id} titulo="Avísame cuando llegue" detalle="Te escribimos por WhatsApp apenas esté en tienda, con fotos reales." />
+          )}
+          {u.estado === "reservado" && (
+            <FormAviso unidadId={u.id} titulo="Avísame si se libera" detalle="Otro cliente la separó. Si no la recoge, eres el primero en saberlo." />
+          )}
+          {u.estado === "vendido" && (
+            <FormAviso unidadId={u.id} titulo="Avísame si llega una similar" detalle="Traemos equipos nuevos cada semana desde EE.UU." />
+          )}
 
           <ul className="mt-5 grid gap-2 text-sm text-ink-2 sm:grid-cols-3">
             <li className="flex items-center gap-2"><ShieldCheck className="size-4 text-green" /> {u.garantia_meses} meses de garantía</li>

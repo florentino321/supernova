@@ -1,9 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
-import { Play } from "lucide-react";
+import { ExternalLink, Play } from "lucide-react";
 import { PlaceholderLaptop } from "@/components/placeholder-laptop";
-import { esVertical, urlEmbebida } from "@/lib/video";
+import { idYoutube, urlEmbebida } from "@/lib/video";
 import type { Medio } from "@/lib/tipos";
 
 export function Galeria({ medios, marca, categoria, nombre }: { medios: Medio[]; marca: string; categoria?: string; nombre: string }) {
@@ -17,26 +18,20 @@ export function Galeria({ medios, marca, categoria, nombre }: { medios: Medio[];
         {!m ? (
           <PlaceholderLaptop marca={marca} categoria={categoria} className="size-full" />
         ) : m.tipo === "imagen" ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={m.url} alt={nombre} className="size-full object-contain" />
+          <Image
+            src={m.url}
+            alt={`${nombre}, foto ${activo + 1}`}
+            fill
+            priority={activo === 0}
+            sizes="(min-width: 1024px) 55vw, 100vw"
+            className="object-contain"
+          />
         ) : m.tipo === "video" ? (
-          <video src={m.url} controls playsInline className="size-full bg-black object-contain" />
-        ) : urlEmbebida(m.url) ? (
-          <div className="grid size-full place-items-center bg-black">
-            <iframe
-              src={urlEmbebida(m.url)!}
-              className={esVertical(m.url) ? "h-full aspect-[9/16]" : "size-full"}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-              title={`Video de ${nombre}`}
-            />
-          </div>
+          <video src={m.url} controls playsInline preload="metadata" className="size-full bg-black object-contain" />
         ) : (
-          <a href={m.url} target="_blank" rel="noreferrer" className="grid size-full place-items-center text-blue underline">
-            Ver video
-          </a>
+          <VideoEnlace url={m.url} nombre={nombre} key={m.id} />
         )}
-        <p className="absolute bottom-3 left-3 rounded-md bg-black/50 px-2 py-0.5 text-[11px] text-white">
+        <p className="pointer-events-none absolute bottom-3 left-3 rounded-md bg-black/50 px-2 py-0.5 text-[11px] text-white">
           {m ? "Fotos reales del equipo" : "Imagen referencial"}
         </p>
       </div>
@@ -52,8 +47,7 @@ export function Galeria({ medios, marca, categoria, nombre }: { medios: Medio[];
               aria-label={`Ver ${x.tipo === "imagen" ? "foto" : "video"} ${i + 1}`}
             >
               {x.tipo === "imagen" ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={x.url} alt="" className="size-full object-cover" />
+                <Image src={x.url} alt="" fill sizes="80px" className="object-cover" />
               ) : (
                 <span className="grid size-full place-items-center bg-navy text-white">
                   <Play className="size-6" />
@@ -63,6 +57,57 @@ export function Galeria({ medios, marca, categoria, nombre }: { medios: Medio[];
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Videos externos sin cargar código de terceros al abrir la ficha:
+ * - YouTube: miniatura liviana; el reproductor se carga solo al tocar "play".
+ * - TikTok: botón que abre el video en TikTok (su reproductor incrustado es muy pesado).
+ */
+function VideoEnlace({ url, nombre }: { url: string; nombre: string }) {
+  const [cargar, setCargar] = useState(false);
+  const yt = idYoutube(url);
+
+  if (yt) {
+    if (cargar) {
+      return (
+        <iframe
+          src={`${urlEmbebida(url)}?autoplay=1&rel=0`}
+          className="size-full bg-black"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+          title={`Video de ${nombre}`}
+        />
+      );
+    }
+    return (
+      <button onClick={() => setCargar(true)} className="group relative size-full bg-black" aria-label={`Reproducir video de ${nombre}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={`https://i.ytimg.com/vi/${yt}/hqdefault.jpg`} alt="" className="size-full object-cover opacity-80" loading="lazy" />
+        <span className="absolute inset-0 grid place-items-center">
+          <span className="grid size-16 place-items-center rounded-full bg-accent text-white shadow-xl transition group-hover:scale-110">
+            <Play className="ml-1 size-7" />
+          </span>
+        </span>
+      </button>
+    );
+  }
+
+  const tiktok = /tiktok\.com/.test(url);
+  return (
+    <div className="grid size-full place-items-center bg-navy p-6 text-center text-white">
+      <div>
+        <span className="mx-auto grid size-16 place-items-center rounded-full bg-white/10">
+          <Play className="ml-1 size-7" />
+        </span>
+        <p className="mt-4 font-display text-xl font-bold">Mira este equipo en video</p>
+        <p className="mt-1 text-sm text-white/60">{tiktok ? "Se abre en TikTok" : "Se abre en otra pestaña"}</p>
+        <a href={url} target="_blank" rel="noreferrer" className="btn-accent mt-5">
+          <ExternalLink className="size-4" /> {tiktok ? "Ver en TikTok" : "Ver video"}
+        </a>
+      </div>
     </div>
   );
 }

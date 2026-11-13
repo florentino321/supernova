@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Boxes, ExternalLink, Laptop, Plane, Receipt, UserCog, Users } from "lucide-react";
+import { BarChart3, BellRing, Boxes, ExternalLink, FileText, HandCoins, Laptop, Plane, Receipt, UserCog, Users } from "lucide-react";
 
 const items = [
   { href: "/admin", texto: "Dashboard", icono: BarChart3, exacto: true, soloAdmin: true },
   { href: "/admin/inventario", texto: "Inventario", icono: Laptop, soloAdmin: true },
   { href: "/admin/ventas", texto: "Ventas", textoVendedor: "Mis ventas", icono: Receipt, soloAdmin: false },
+  { href: "/admin/reservas", texto: "Reservas", icono: HandCoins, soloAdmin: false },
+  { href: "/admin/cotizaciones", texto: "Cotizaciones", icono: FileText, soloAdmin: false },
+  { href: "/admin/interesados", texto: "Interesados", icono: BellRing, soloAdmin: false },
   { href: "/admin/importaciones", texto: "Importaciones", icono: Plane, soloAdmin: true },
   { href: "/admin/modelos", texto: "Modelos y marcas", icono: Boxes, soloAdmin: true },
   { href: "/admin/clientes", texto: "Clientes", icono: Users, soloAdmin: true },
@@ -21,7 +24,7 @@ export function NavAdmin({ esAdmin }: { esAdmin: boolean }) {
       {items
         .filter((i) => esAdmin || !i.soloAdmin)
         .map((i) => {
-          const activo = i.exacto ? path === i.href : path.startsWith(i.href);
+          const activo = i.exacto ? path === i.href : path.startsWith(i.href) && !(i.href === "/admin/ventas" && !esAdmin && path === "/admin/ventas/nueva");
           return (
             <Link
               key={i.href}

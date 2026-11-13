@@ -74,7 +74,7 @@ export default function LayoutTienda({ children }: LayoutProps<"/">) {
               {EMPRESA.lema}. Cada equipo que ves en la web existe físicamente y tiene su propio número de serie.
             </p>
           </div>
-          <div className="space-y-3 text-sm">
+          <div className="min-w-0 space-y-3 text-sm">
             <p className="font-semibold text-white">Visítanos</p>
             <p className="flex gap-2">
               <MapPin className="mt-0.5 size-4 shrink-0" /> {EMPRESA.direccion}, {EMPRESA.ciudad}
@@ -83,12 +83,12 @@ export default function LayoutTienda({ children }: LayoutProps<"/">) {
               <Clock className="mt-0.5 size-4 shrink-0" /> {EMPRESA.horario}
             </p>
           </div>
-          <div className="space-y-3 text-sm">
+          <div className="min-w-0 space-y-3 text-sm">
             <p className="font-semibold text-white">Contacto</p>
             <a className="flex gap-2 hover:text-white" href={enlaceWhatsApp("Hola")} target="_blank" rel="noreferrer">
               <MessageCircle className="mt-0.5 size-4 shrink-0" /> WhatsApp
             </a>
-            <a className="flex gap-2 hover:text-white" href={`mailto:${EMPRESA.email}`}>
+            <a className="flex min-w-0 gap-2 break-all hover:text-white" href={`mailto:${EMPRESA.email}`}>
               <Mail className="mt-0.5 size-4 shrink-0" /> {EMPRESA.email}
             </a>
           </div>

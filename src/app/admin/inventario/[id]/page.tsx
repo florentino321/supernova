@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, History, Images } from "lucide-react";
+import { ArrowLeft, BellRing, FileText, HandCoins, History, Images } from "lucide-react";
 import { ChipEstado } from "@/components/chips";
 import { requerirAdmin } from "@/lib/sesion";
 import { diasEntre, enSoles, etiquetaEstado, fecha, fechaHora } from "@/lib/formato";
@@ -15,18 +15,22 @@ const textoEvento: Record<string, string> = {
   cambio_estado: "Cambio de estado",
   cambio_precio: "Cambio de precio",
   venta_anulada: "Venta anulada",
+  reserva: "Reservado con adelanto",
+  reserva_cancelada: "Reserva cancelada",
+  reserva_vencida: "Reserva vencida",
 };
 
 export default async function DetalleEquipo({ params, searchParams }: PageProps<"/admin/inventario/[id]">) {
   const { id } = await params;
   const sp = await searchParams;
   const { supabase, esAdmin } = await requerirAdmin();
-  const [{ data: u }, { data: medios }, { data: movimientos }, { data: ventas }, datos] = await Promise.all([
+  const [{ data: u }, { data: medios }, { data: movimientos }, { data: ventas }, datos, { count: interesados }] = await Promise.all([
     supabase.from("unidades").select("*, modelos(*, marcas(*), categorias(*)), lotes(*)").eq("id", id).maybeSingle(),
     supabase.from("medios").select("*").eq("unidad_id", id).order("posicion"),
     supabase.from("movimientos").select("*").eq("unidad_id", id).order("creado_en", { ascending: false }),
     supabase.from("ventas").select("*, clientes(nombre)").eq("unidad_id", id).order("fecha", { ascending: false }),
     datosFormulario(supabase),
+    supabase.from("avisos").select("id", { count: "exact", head: true }).eq("unidad_id", id).eq("estado", "pendiente"),
   ]);
   if (!u) notFound();
   const unidad = u as unknown as Unidad;
@@ -51,6 +55,15 @@ export default async function DetalleEquipo({ params, searchParams }: PageProps<
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {(unidad.estado === "disponible" || unidad.estado === "en_transito") && (
+              <>
+                <Link href={`/admin/reservas/nueva?unidad=${unidad.id}`} className="btn-ghost"><HandCoins className="size-4" /> Separar</Link>
+                <Link href={`/admin/cotizaciones/nueva?unidad=${unidad.id}`} className="btn-ghost"><FileText className="size-4" /> Cotizar</Link>
+              </>
+            )}
+            {!!interesados && (
+              <Link href="/admin/interesados" className="btn-ghost text-violet"><BellRing className="size-4" /> {interesados} {interesados === 1 ? "interesado" : "interesados"}</Link>
+            )}
             <AccionesUnidad unidad={unidad} esAdmin={esAdmin} />
           </div>
         </div>

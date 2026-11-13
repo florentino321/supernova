@@ -14,7 +14,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ArrowDownRight, ArrowUpRight, Clock, Minus, Plus, TrendingUp } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, BellRing, Clock, FileText, HandCoins, Minus, Plus, TrendingUp } from "lucide-react";
 import { compacto, enSoles, enSolesCorto, enPorcentaje, etiquetaCanal, etiquetaPago, fecha } from "@/lib/formato";
 import type { Canal, EstadoUnidad, MetodoPago } from "@/lib/tipos";
 
@@ -58,11 +58,14 @@ function rango(p: Periodo, hoy: Date, primera: Date): [Date, Date] {
 
 const mesCorto = (d: Date) => d.toLocaleDateString("es-PE", { month: "short", year: "2-digit" }).replace(".", "");
 
-export function Dashboard({ ventas, inventario, esAdmin, nombre }: { ventas: FilaVenta[]; inventario: FilaInventario[]; esAdmin: boolean; nombre: string }) {
+export type Pendientes = { reservas: number; adelantos: number; interesados: number; cotizaciones: number };
+
+export function Dashboard({ ventas, inventario, esAdmin, nombre, pendientes }: {
+  ventas: FilaVenta[]; inventario: FilaInventario[]; esAdmin: boolean; nombre: string; pendientes: Pendientes;
+}) {
   const [periodo, setPeriodo] = useState<Periodo>("12m");
   const [marca, setMarca] = useState("");
   const [categoria, setCategoria] = useState("");
-  const [canal, setCanal] = useState("");
 
   const hoy = useMemo(() => new Date(), []);
   const marcas = useMemo(() => [...new Set(inventario.map((u) => u.marca))].sort(), [inventario]);
@@ -73,7 +76,7 @@ export function Dashboard({ ventas, inventario, esAdmin, nombre }: { ventas: Fil
     const [ini, fin] = rango(periodo, hoy, primera);
     const largo = fin.getTime() - ini.getTime();
     const filtro = (v: FilaVenta) =>
-      (!marca || v.marca === marca) && (!categoria || v.categoria === categoria) && (!canal || v.canal === canal);
+      (!marca || v.marca === marca) && (!categoria || v.categoria === categoria);
     const base = ventas.filter(filtro);
     const actuales = base.filter((v) => +new Date(v.fecha) >= +ini && +new Date(v.fecha) < +fin);
     const previas = base.filter((v) => +new Date(v.fecha) >= ini.getTime() - largo && +new Date(v.fecha) < +ini);
@@ -168,7 +171,7 @@ export function Dashboard({ ventas, inventario, esAdmin, nombre }: { ventas: Fil
       aging,
       lentos: enStock.map((u) => ({ ...u, dias: dias(u) })).sort((a, b) => b.dias - a.dias).slice(0, 5),
     };
-  }, [ventas, inventario, periodo, marca, categoria, canal, hoy, esAdmin]);
+  }, [ventas, inventario, periodo, marca, categoria, hoy, esAdmin]);
 
   const nombrePeriodo = PERIODOS.find((p) => p.id === periodo)!.t.toLowerCase();
 
@@ -206,12 +209,8 @@ export function Dashboard({ ventas, inventario, esAdmin, nombre }: { ventas: Fil
             <option value="">Todas las marcas</option>
             {marcas.map((m) => <option key={m}>{m}</option>)}
           </select>
-          <select className="input w-auto shrink-0 py-2" value={canal} onChange={(e) => setCanal(e.target.value)}>
-            <option value="">Todos los canales</option>
-            {(Object.keys(etiquetaCanal) as Canal[]).map((c) => <option key={c} value={c}>{etiquetaCanal[c]}</option>)}
-          </select>
-          {(marca || categoria || canal) && (
-            <button className="shrink-0 text-sm font-medium text-blue" onClick={() => { setMarca(""); setCategoria(""); setCanal(""); }}>Limpiar</button>
+          {(marca || categoria) && (
+            <button className="shrink-0 text-sm font-medium text-blue" onClick={() => { setMarca(""); setCategoria(""); }}>Limpiar</button>
           )}
         </div>
       </header>
@@ -225,6 +224,16 @@ export function Dashboard({ ventas, inventario, esAdmin, nombre }: { ventas: Fil
           <Kpi titulo="Equipos vendidos" valor={String(d.actual.unidades)} actual={d.actual.unidades} previo={d.previo.unidades} hayPrevio={d.hayPrevio} />
           <Kpi titulo="Ticket promedio" valor={enSolesCorto(d.actual.ticket)} actual={d.actual.ticket} previo={d.previo.ticket} hayPrevio={d.hayPrevio} />
           <Kpi titulo="Días para vender" valor={d.actual.unidades ? `${Math.round(d.actual.dias)} d` : "—"} actual={d.actual.dias} previo={d.previo.dias} hayPrevio={d.hayPrevio} inverso />
+        </section>
+
+        {/* ---------- Pendientes del día ---------- */}
+        <section className="grid gap-3 sm:grid-cols-3">
+          <Pendiente href="/admin/reservas" icono={<HandCoins className="size-5" />} titulo="Reservas activas" valor={pendientes.reservas}
+            detalle={pendientes.reservas ? `${enSoles(pendientes.adelantos)} en adelantos` : "Ningún equipo separado"} />
+          <Pendiente href="/admin/interesados" icono={<BellRing className="size-5" />} titulo="Interesados por contactar" valor={pendientes.interesados}
+            detalle={pendientes.interesados ? "Pidieron aviso desde la web" : "Sin pendientes"} />
+          <Pendiente href="/admin/cotizaciones" icono={<FileText className="size-5" />} titulo="Cotizaciones vigentes" valor={pendientes.cotizaciones}
+            detalle={pendientes.cotizaciones ? "Esperando respuesta del cliente" : "Sin cotizaciones abiertas"} />
         </section>
 
         {/* ---------- Serie temporal ---------- */}
@@ -254,18 +263,18 @@ export function Dashboard({ ventas, inventario, esAdmin, nombre }: { ventas: Fil
           {d.actual.unidades === 0 && <p className="text-center text-sm text-muted">No hay ventas en este periodo con los filtros elegidos.</p>}
         </section>
 
-        {/* ---------- Categoría y marca ---------- */}
-        <div className="grid gap-6 lg:grid-cols-2">
-          <BarrasH titulo="Ventas por categoría" sub={`Ingresos · últimos ${nombrePeriodo}`} datos={d.porCategoria} esAdmin={esAdmin} />
-          <BarrasH titulo="Ventas por marca" sub={`Ingresos · últimos ${nombrePeriodo}`} datos={d.porMarca} esAdmin={esAdmin} />
-        </div>
-
-        {/* ---------- Canales, pagos, ciudades ---------- */}
-        <div className="grid gap-6 lg:grid-cols-3">
-          <ListaBarras titulo="Canal de venta" sub="¿Por dónde nos compran?" datos={d.porCanal} />
-          <ListaBarras titulo="Método de pago" sub="Participación en ingresos" datos={d.porPago} />
-          <ListaBarras titulo="Clientes por ciudad" sub="Top 6 por ingresos" datos={d.porCiudad} />
-        </div>
+        {/* ---------- Desglose (una sola tarjeta con pestañas) ---------- */}
+        <Desglose
+          sub={`Ingresos · últimos ${nombrePeriodo}`}
+          esAdmin={esAdmin}
+          grupos={{
+            Categoría: d.porCategoria,
+            Marca: d.porMarca,
+            Canal: d.porCanal,
+            "Método de pago": d.porPago,
+            Ciudad: d.porCiudad,
+          }}
+        />
 
         {/* ---------- Inventario ---------- */}
         <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
@@ -412,6 +421,19 @@ function Kpi({ titulo, valor, actual, previo, hayPrevio, destacado, inverso, pun
   );
 }
 
+function Pendiente({ href, icono, titulo, valor, detalle }: { href: string; icono: React.ReactNode; titulo: string; valor: number; detalle: string }) {
+  return (
+    <Link href={href} className="card flex items-center gap-4 p-4 transition hover:border-ink-2">
+      <span className={`grid size-11 shrink-0 place-items-center rounded-xl ${valor ? "bg-amber-100 text-amber-800" : "bg-surface-2 text-muted"}`}>{icono}</span>
+      <span className="min-w-0">
+        <span className="block text-sm text-muted">{titulo}</span>
+        <span className="num block font-display text-2xl font-extrabold leading-tight">{valor}</span>
+        <span className="block truncate text-xs text-muted">{detalle}</span>
+      </span>
+    </Link>
+  );
+}
+
 function Leyenda({ color, texto, linea }: { color: string; texto: string; linea?: boolean }) {
   return (
     <span className="flex items-center gap-1.5">
@@ -449,53 +471,40 @@ function TooltipSerie({ active, payload, label, esAdmin }: { active?: boolean; p
 
 type Grupo = { nombre: string; ingresos: number; utilidad: number; unidades: number };
 
-function BarrasH({ titulo, sub, datos, esAdmin }: { titulo: string; sub: string; datos: Grupo[]; esAdmin: boolean }) {
-  return (
-    <section className="card p-5">
-      <h2 className="font-display text-lg font-bold">{titulo}</h2>
-      <p className="text-sm text-muted">{sub}</p>
-      <div className="mt-3" style={{ height: Math.max(120, datos.length * 40 + 16) }}>
-        {datos.length === 0 ? (
-          <p className="py-10 text-center text-sm text-muted">Sin ventas en el periodo.</p>
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={datos} layout="vertical" margin={{ top: 0, right: 64, left: 0, bottom: 0 }} barCategoryGap="30%">
-              <XAxis type="number" hide />
-              <YAxis type="category" dataKey="nombre" width={150} tickLine={false} axisLine={false} tick={{ fill: "#3c4859", fontSize: 13 }} />
-              <Tooltip
-                cursor={{ fill: "rgba(11,22,38,0.04)" }}
-                content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
-                  const g = payload[0].payload as Grupo;
-                  const filas: [string, string][] = [["Ingresos", enSoles(g.ingresos)], ["Equipos", String(g.unidades)]];
-                  if (esAdmin) filas.push(["Utilidad", enSoles(g.utilidad)], ["Margen", g.ingresos ? enPorcentaje(g.utilidad / g.ingresos) : "—"]);
-                  return <CajaTooltip titulo={g.nombre} filas={filas} />;
-                }}
-              />
-              <Bar dataKey="ingresos" fill={C.s1} radius={[0, 4, 4, 0]} maxBarSize={22} label={{ position: "right", fill: "#3c4859", fontSize: 12, formatter: (v: unknown) => compacto(Number(v)) }} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function ListaBarras({ titulo, sub, datos }: { titulo: string; sub: string; datos: Grupo[] }) {
+function Desglose({ sub, grupos, esAdmin }: { sub: string; grupos: Record<string, Grupo[]>; esAdmin: boolean }) {
+  const claves = Object.keys(grupos);
+  const [dim, setDim] = useState(claves[0]);
+  const datos = grupos[dim] ?? [];
   const total = datos.reduce((a, x) => a + x.ingresos, 0);
   return (
     <section className="card p-5">
-      <h2 className="font-display text-lg font-bold">{titulo}</h2>
-      <p className="text-sm text-muted">{sub}</p>
-      <ul className="mt-4 space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-display text-lg font-bold">¿De dónde vienen las ventas?</h2>
+          <p className="text-sm text-muted">{sub}</p>
+        </div>
+        <div className="scroll-fino flex max-w-full overflow-x-auto rounded-xl bg-surface-2 p-1">
+          {claves.map((k) => (
+            <button
+              key={k}
+              onClick={() => setDim(k)}
+              className={`shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition ${dim === k ? "bg-surface text-ink shadow-sm" : "text-muted hover:text-ink"}`}
+            >
+              {k}
+            </button>
+          ))}
+        </div>
+      </div>
+      <ul className="mt-5 grid gap-x-10 gap-y-3 md:grid-cols-2">
         {datos.map((x) => {
           const pct = total ? x.ingresos / total : 0;
           return (
-            <li key={x.nombre} className="group" title={`${x.nombre}: ${enSoles(x.ingresos)} · ${x.unidades} ventas`}>
+            <li key={x.nombre} className="group">
               <div className="flex items-baseline justify-between gap-2 text-sm">
-                <span className="font-medium">{x.nombre}</span>
-                <span className="num text-ink-2">
-                  <span className="font-semibold text-ink">{(pct * 100).toFixed(0)}%</span> · {x.unidades} {x.unidades === 1 ? "venta" : "ventas"}
+                <span className="truncate font-medium">{x.nombre}</span>
+                <span className="num shrink-0 text-ink-2">
+                  <span className="font-semibold text-ink">{enSolesCorto(x.ingresos)}</span> · {(pct * 100).toFixed(0)}% · {x.unidades} {x.unidades === 1 ? "venta" : "ventas"}
+                  {esAdmin && x.ingresos > 0 && <> · margen {enPorcentaje(x.utilidad / x.ingresos)}</>}
                 </span>
               </div>
               <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-2">
@@ -504,7 +513,7 @@ function ListaBarras({ titulo, sub, datos }: { titulo: string; sub: string; dato
             </li>
           );
         })}
-        {datos.length === 0 && <li className="py-6 text-center text-sm text-muted">Sin datos.</li>}
+        {datos.length === 0 && <li className="py-6 text-center text-sm text-muted md:col-span-2">Sin ventas en el periodo.</li>}
       </ul>
     </section>
   );

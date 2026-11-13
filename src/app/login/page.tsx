@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { FormLogin } from "./form-login";
 
-export const metadata = { title: "Acceso del personal" };
+export const metadata = { title: "Acceso del personal", robots: { index: false } };
 
 export default async function Login({ searchParams }: PageProps<"/login">) {
   const sp = await searchParams;

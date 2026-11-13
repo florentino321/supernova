@@ -1,18 +1,12 @@
-/** Convierte un enlace de YouTube o TikTok en una URL para incrustar. */
-export function urlEmbebida(url: string): string | null {
+/** Extrae el id de un video de YouTube (youtu.be, watch?v=, shorts, embed). */
+export function idYoutube(url: string): string | null {
   try {
     const u = new URL(url);
     const host = u.hostname.replace(/^www\.|^m\./, "");
-    if (host === "youtu.be") return `https://www.youtube.com/embed/${u.pathname.slice(1)}`;
+    if (host === "youtu.be") return u.pathname.slice(1) || null;
     if (host === "youtube.com") {
-      if (u.pathname.startsWith("/shorts/")) return `https://www.youtube.com/embed/${u.pathname.split("/")[2]}`;
-      if (u.pathname.startsWith("/embed/")) return url;
-      const v = u.searchParams.get("v");
-      if (v) return `https://www.youtube.com/embed/${v}`;
-    }
-    if (host === "tiktok.com" || host.endsWith(".tiktok.com")) {
-      const id = u.pathname.match(/video\/(\d+)/)?.[1];
-      if (id) return `https://www.tiktok.com/embed/v2/${id}`;
+      if (u.pathname.startsWith("/shorts/") || u.pathname.startsWith("/embed/")) return u.pathname.split("/")[2] || null;
+      return u.searchParams.get("v");
     }
     return null;
   } catch {
@@ -20,6 +14,19 @@ export function urlEmbebida(url: string): string | null {
   }
 }
 
-export function esVertical(url: string) {
-  return /tiktok\.com|youtube\.com\/shorts/.test(url);
+/** URL para incrustar un video de YouTube (solo se carga cuando el visitante lo pide). */
+export function urlEmbebida(url: string): string | null {
+  const id = idYoutube(url);
+  return id ? `https://www.youtube-nocookie.com/embed/${id}` : null;
+}
+
+/** Enlaces de video aceptados en el panel: YouTube o TikTok (TikTok se abre en su app). */
+export function esEnlaceVideoValido(url: string) {
+  if (idYoutube(url)) return true;
+  try {
+    const host = new URL(url).hostname;
+    return host === "tiktok.com" || host.endsWith(".tiktok.com");
+  } catch {
+    return false;
+  }
 }

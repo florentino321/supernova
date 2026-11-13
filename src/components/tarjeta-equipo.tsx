@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Cpu, HardDrive, MemoryStick, Monitor } from "lucide-react";
 import { portada } from "@/lib/catalogo";
@@ -20,12 +21,12 @@ export function TarjetaEquipo({ u }: { u: UnidadPublica }) {
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-surface-2">
         {img ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={img.url}
             alt={u.modelos?.nombre ?? "Laptop"}
-            className="size-full object-cover transition duration-500 group-hover:scale-105"
-            loading="lazy"
+            fill
+            sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+            className="object-cover transition duration-500 group-hover:scale-105"
           />
         ) : (
           <PlaceholderLaptop marca={marca} categoria={u.modelos?.categorias?.slug} className="size-full" />

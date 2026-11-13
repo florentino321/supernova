@@ -12,11 +12,14 @@ export default async function DetalleVenta({ params, searchParams }: PageProps<"
   const { id } = await params;
   const sp = await searchParams;
   const { supabase, esAdmin } = await obtenerSesion();
-  const { data } = await supabase
-    .from("ventas")
-    .select("*, unidades(*, modelos(nombre, marcas(nombre))), clientes(*), perfiles(nombre)")
-    .eq("id", id)
-    .maybeSingle();
+  const [{ data }, { data: reserva }] = await Promise.all([
+    supabase
+      .from("ventas")
+      .select("*, unidades(*, modelos(nombre, marcas(nombre))), clientes(*), perfiles(nombre)")
+      .eq("id", id)
+      .maybeSingle(),
+    supabase.from("reservas").select("codigo, adelanto_pen, creado_en").eq("venta_id", id).maybeSingle(),
+  ]);
   if (!data) notFound();
   const v = data as unknown as Venta;
   const u = v.unidades!;
@@ -105,6 +108,18 @@ export default async function DetalleVenta({ params, searchParams }: PageProps<"
                 <td className="py-3 font-semibold">Total</td>
                 <td className="num py-3 text-right font-display text-2xl font-extrabold">{enSoles(v.total_pen)}</td>
               </tr>
+              {reserva && (
+                <>
+                  <tr className="text-muted">
+                    <td className="py-1">Adelanto pagado el {fecha(reserva.creado_en)} (reserva {reserva.codigo})</td>
+                    <td className="num py-1 text-right">−{enSoles(reserva.adelanto_pen)}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1 font-semibold">Saldo pagado al recoger</td>
+                    <td className="num py-1 text-right font-semibold">{enSoles(Number(v.total_pen) - Number(reserva.adelanto_pen))}</td>
+                  </tr>
+                </>
+              )}
             </tbody>
           </table>
 

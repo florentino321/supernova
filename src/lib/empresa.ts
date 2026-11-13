@@ -14,6 +14,15 @@ export const EMPRESA = {
   },
 };
 
+/** Reglas para separar un equipo con adelanto (se muestran en la web y se usan en el panel). */
+export const RESERVA = {
+  dias: 7, // días que se guarda el equipo
+  porcentaje: 0.1, // adelanto sugerido: 10 % del precio…
+  minimo: 100, // …y como mínimo S/ 100
+};
+export const adelantoSugerido = (precio: number) =>
+  Math.min(Math.max(RESERVA.minimo, Math.ceil((precio * RESERVA.porcentaje) / 10) * 10), Math.floor(precio / 2));
+
 /**
  * Los vendedores ingresan con un "usuario" (sin correo). Internamente Supabase Auth
  * lo guarda como un correo sintético en un dominio reservado que nunca recibe correos.
@@ -27,4 +36,11 @@ export const correoDeUsuario = (usuarioOCorreo: string) => {
 
 export function enlaceWhatsApp(mensaje: string) {
   return `https://wa.me/${EMPRESA.whatsapp}?text=${encodeURIComponent(mensaje)}`;
+}
+
+/** Número de WhatsApp de un cliente con código de Perú (51) si se guardó con 9 dígitos. */
+export function whatsappDe(tel?: string | null) {
+  const t = (tel ?? "").replace(/\D/g, "");
+  if (!t) return null;
+  return t.length === 9 ? `51${t}` : t;
 }
