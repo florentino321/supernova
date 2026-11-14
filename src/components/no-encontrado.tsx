@@ -14,8 +14,8 @@ export async function ContenidoNoEncontrado({ conLogo = false }: { conLogo?: boo
         <p className="font-display text-7xl font-extrabold text-navy">404</p>
         <h1 className="mt-2 font-display text-2xl font-extrabold">Esta página no existe</h1>
         <p className="mt-3 text-ink-2">
-          Puede que el equipo ya se haya vendido o que el enlace esté mal escrito. Cada laptop es una pieza única, así que
-          rotan rápido.
+          Puede que el equipo ya se haya vendido o que el enlace esté mal escrito. Los equipos rotan rápido, pero
+          llegan nuevos cada semana.
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Link href="/catalogo" className="btn-accent"><Search className="size-4" /> Ver equipos disponibles</Link>

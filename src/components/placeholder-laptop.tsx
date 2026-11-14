@@ -1,5 +1,5 @@
 // Ilustración que se muestra cuando un equipo aún no tiene fotos.
-const paletas: Record<string, [string, string]> = {
+export const paletas: Record<string, [string, string]> = {
   gaming: ["#1a0f2e", "#d7263d"],
   ultrabooks: ["#0d2a4a", "#4f9cf9"],
   "ejecutivas-oficina": ["#0d1b2e", "#7c8ba1"],

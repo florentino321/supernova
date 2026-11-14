@@ -1,8 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
-import { ExternalLink, Play } from "lucide-react";
+import { useRef, useState, type CSSProperties } from "react";
+import { ChevronLeft, ChevronRight, ExternalLink, Play } from "lucide-react";
 import { PlaceholderLaptop } from "@/components/placeholder-laptop";
 import { idYoutube, urlEmbebida } from "@/lib/video";
 import type { Medio } from "@/lib/tipos";
@@ -10,22 +10,51 @@ import type { Medio } from "@/lib/tipos";
 export function Galeria({ medios, marca, categoria, nombre }: { medios: Medio[]; marca: string; categoria?: string; nombre: string }) {
   const ordenados = [...medios].sort((a, b) => Number(b.es_portada) - Number(a.es_portada) || a.posicion - b.posicion);
   const [activo, setActivo] = useState(0);
+  const [direccion, setDireccion] = useState(0); // -1 anterior, 1 siguiente: de qué lado entra la foto
+  const inicioX = useRef<number | null>(null);
   const m = ordenados[activo];
+  const varias = ordenados.length > 1;
+
+  const mostrar = (i: number) => {
+    const n = ordenados.length;
+    const destino = ((i % n) + n) % n;
+    if (destino === activo) return;
+    setDireccion(i > activo ? 1 : -1);
+    setActivo(destino);
+  };
+
+  // deslizar con el dedo para pasar las fotos
+  const alSoltar = (x: number) => {
+    if (inicioX.current == null) return;
+    const dx = x - inicioX.current;
+    inicioX.current = null;
+    if (varias && Math.abs(dx) > 40) mostrar(activo + (dx < 0 ? 1 : -1));
+  };
 
   return (
     <div>
-      <div className="card relative aspect-[4/3] overflow-hidden bg-surface-2">
+      <div
+        className="card group relative aspect-[4/3] touch-pan-y overflow-hidden bg-surface-2"
+        onPointerDown={(e) => {
+          if (e.pointerType !== "mouse" && m?.tipo === "imagen") inicioX.current = e.clientX;
+        }}
+        onPointerUp={(e) => alSoltar(e.clientX)}
+        onPointerCancel={() => (inicioX.current = null)}
+      >
         {!m ? (
           <PlaceholderLaptop marca={marca} categoria={categoria} className="size-full" />
         ) : m.tipo === "imagen" ? (
-          <Image
-            src={m.url}
-            alt={`${nombre}, foto ${activo + 1}`}
-            fill
-            priority={activo === 0}
-            sizes="(min-width: 1024px) 55vw, 100vw"
-            className="object-contain"
-          />
+          <div key={m.id} className="foto-entra absolute inset-0" style={{ "--dx": `${direccion * 36}px` } as CSSProperties}>
+            <Image
+              src={m.url}
+              alt={`${nombre}, foto ${activo + 1}`}
+              fill
+              priority={activo === 0}
+              sizes="(min-width: 1024px) 55vw, 100vw"
+              className="object-contain"
+              draggable={false}
+            />
+          </div>
         ) : m.tipo === "video" ? (
           <video src={m.url} controls playsInline preload="metadata" className="size-full bg-black object-contain" />
         ) : (
@@ -34,15 +63,36 @@ export function Galeria({ medios, marca, categoria, nombre }: { medios: Medio[];
         <p className="pointer-events-none absolute bottom-3 left-3 rounded-md bg-black/50 px-2 py-0.5 text-[11px] text-white">
           {m ? "Fotos reales del equipo" : "Imagen referencial"}
         </p>
+        {varias && (
+          <>
+            <span className="num pointer-events-none absolute right-3 top-3 rounded-md bg-black/50 px-2 py-0.5 text-[11px] text-white">
+              {activo + 1} / {ordenados.length}
+            </span>
+            {[
+              { d: -1, I: ChevronLeft, lado: "left-3", t: "Foto anterior" },
+              { d: 1, I: ChevronRight, lado: "right-3", t: "Foto siguiente" },
+            ].map(({ d, I, lado, t }) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => mostrar(activo + d)}
+                aria-label={t}
+                className={`absolute ${lado} top-1/2 hidden size-10 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-ink shadow-lg transition hover:scale-110 active:scale-95 sm:grid sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100`}
+              >
+                <I className="size-5" />
+              </button>
+            ))}
+          </>
+        )}
       </div>
-      {ordenados.length > 1 && (
-        <div className="scroll-fino mt-3 flex gap-2 overflow-x-auto pb-1">
+      {varias && (
+        <div className="scroll-fino mt-2 flex gap-2 overflow-x-auto p-1">
           {ordenados.map((x, i) => (
             <button
               key={x.id}
-              onClick={() => setActivo(i)}
-              className={`relative size-20 shrink-0 overflow-hidden rounded-xl border-2 bg-surface-2 transition ${
-                i === activo ? "border-navy" : "border-transparent opacity-70 hover:opacity-100"
+              onClick={() => mostrar(i)}
+              className={`relative size-20 shrink-0 overflow-hidden rounded-xl border-2 bg-surface-2 transition duration-300 active:scale-95 ${
+                i === activo ? "scale-[1.04] border-navy" : "border-transparent opacity-70 hover:opacity-100"
               }`}
               aria-label={`Ver ${x.tipo === "imagen" ? "foto" : "video"} ${i + 1}`}
             >

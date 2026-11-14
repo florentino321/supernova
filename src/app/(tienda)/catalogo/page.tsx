@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { TarjetaEquipo } from "@/components/tarjeta-equipo";
+import { TransicionPagina } from "@/components/transicion-pagina";
 import { obtenerCatalogo } from "@/lib/catalogo";
 import { precioFinal } from "@/lib/formato";
 import { Filtros } from "./filtros";
@@ -47,6 +48,7 @@ export default async function Catalogo({ searchParams }: PageProps<"/catalogo">)
   const titulo = estado === "en_transito" ? "Llegando pronto" : categoriaActual?.nombre ?? "Todo el catálogo";
 
   return (
+    <TransicionPagina>
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
       <div className="flex flex-wrap items-end justify-between gap-4 border-b border-line pb-6">
         <div>
@@ -84,5 +86,6 @@ export default async function Catalogo({ searchParams }: PageProps<"/catalogo">)
         </div>
       </div>
     </div>
+    </TransicionPagina>
   );
 }

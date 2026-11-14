@@ -64,7 +64,10 @@ body {
 }
 @utility btn {
   @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition
-    disabled:cursor-not-allowed disabled:opacity-50;
+    active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50;
+}
+@utility btn-whatsapp {
+  @apply btn bg-[#25d366] text-[#06281a] hover:bg-[#2ee072] hover:shadow-[0_10px_28px_-10px_rgba(37,211,102,0.9)];
 }
 @utility btn-primary {
   @apply btn bg-navy text-white hover:bg-navy-2;
@@ -100,6 +103,220 @@ body {
   }
   .tabla tbody tr:hover {
     @apply bg-surface-2/60;
+  }
+}
+
+/* ---------------------------------------------------------------
+   Animaciones de la tienda (ver components/animaciones.tsx)
+---------------------------------------------------------------- */
+:root {
+  --suave: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* aparecer al deslizar (components/revelar.tsx): sin JS no se oculta nada */
+[data-revelar][data-oculto] {
+  opacity: 0;
+  transform: translateY(28px) scale(0.98);
+}
+[data-revelar][data-visible] {
+  transition:
+    opacity 0.7s var(--suave) var(--retraso, 0ms),
+    transform 0.7s var(--suave) var(--retraso, 0ms);
+}
+
+/* entrada de la portada al cargar (solo CSS, no espera al JS) */
+.entrada {
+  animation: entrada 0.8s var(--suave) both;
+  animation-delay: var(--d, 0ms);
+}
+@keyframes entrada {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+    filter: blur(6px);
+  }
+}
+
+/* "americanas" con brillo que recorre el texto */
+.texto-brillo {
+  background: linear-gradient(100deg, #ffffff 20%, #ff8a99 40%, #ffffff 55%, #8fb8ff 75%, #ffffff 90%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: brillo 7s linear infinite;
+}
+@keyframes brillo {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -150% 0;
+  }
+}
+
+/* manchas de luz del fondo de la portada */
+.flotar {
+  animation: flotar 14s ease-in-out infinite alternate;
+}
+.flotar-lento {
+  animation: flotar 20s ease-in-out infinite alternate-reverse;
+}
+@keyframes flotar {
+  to {
+    transform: translate(-60px, 40px) scale(1.12);
+  }
+}
+
+/* onda al pulsar (capa encima del elemento, recortada a su forma) */
+.onda-capa {
+  position: fixed;
+  z-index: 60;
+  overflow: hidden;
+  pointer-events: none;
+}
+.onda {
+  position: absolute;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0.28;
+  transform: scale(0);
+  animation: onda 0.6s ease-out forwards;
+}
+.onda-suave {
+  opacity: 0.1;
+}
+@keyframes onda {
+  to {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+/* latido del botón de WhatsApp */
+.latido {
+  animation: latido 2.6s ease-out infinite;
+}
+@keyframes latido {
+  0% {
+    box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.55);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 14px rgba(37, 211, 102, 0);
+  }
+}
+
+/* cambio de foto en la galería */
+.foto-entra {
+  animation: foto-entra 0.45s var(--suave) both;
+}
+@keyframes foto-entra {
+  from {
+    opacity: 0;
+    transform: translateX(var(--dx, 0px)) scale(1.02);
+  }
+}
+
+/* cabecera al deslizar + barra de progreso */
+#cabecera {
+  view-transition-name: cabecera;
+  transition:
+    box-shadow 0.3s,
+    background-color 0.3s;
+}
+#cabecera[data-desplazado] {
+  background-color: rgb(255 255 255 / 0.95);
+  box-shadow: 0 10px 30px -18px rgb(11 22 38 / 0.45);
+}
+#progreso-lectura {
+  transform: scaleX(var(--progreso, 0));
+  transform-origin: left;
+}
+
+/* menú móvil */
+details[open] > .menu-movil {
+  animation: menu-abre 0.2s var(--suave);
+  transform-origin: top right;
+}
+@keyframes menu-abre {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+}
+
+/* transición entre páginas (React <ViewTransition>) */
+::view-transition {
+  pointer-events: none;
+}
+::view-transition-old(.pagina-sale) {
+  animation: pagina-sale 0.16s ease-in both;
+}
+::view-transition-new(.pagina-entra) {
+  animation: pagina-entra 0.42s var(--suave) 0.08s both;
+}
+@keyframes pagina-sale {
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+@keyframes pagina-entra {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+}
+::view-transition-group(cabecera) {
+  animation: none;
+  z-index: 100;
+}
+::view-transition-old(cabecera) {
+  display: none;
+}
+::view-transition-new(cabecera) {
+  animation: none;
+}
+
+/* "Movimiento reducido" (p. ej. Windows con los efectos de animación apagados):
+   nada se desplaza ni se mueve solo; quedan fundidos suaves. */
+@media (prefers-reduced-motion: reduce) {
+  .flotar,
+  .flotar-lento,
+  .latido {
+    animation: none;
+  }
+  .texto-brillo {
+    animation: none;
+    background-size: 100% 100%;
+  }
+  .entrada,
+  .foto-entra,
+  details[open] > .menu-movil {
+    animation-name: fundido;
+  }
+  .entrada {
+    filter: none;
+  }
+  [data-revelar][data-oculto] {
+    transform: none;
+  }
+  ::view-transition-old(.pagina-sale) {
+    animation-name: fundido-sale;
+  }
+  ::view-transition-new(.pagina-entra) {
+    animation-name: fundido;
+  }
+}
+@keyframes fundido {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes fundido-sale {
+  to {
+    opacity: 0;
   }
 }
 

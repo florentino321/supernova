@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { Clock, Mail, MapPin, Menu, MessageCircle, Phone } from "lucide-react";
+import { Clock, Mail, MapPin, Menu, Phone } from "lucide-react";
+import { AnimacionesTienda } from "@/components/animaciones";
+import { IconoWhatsApp } from "@/components/iconos";
 import { Logo } from "@/components/logo";
 import { LEMA, enlaceWhatsApp } from "@/lib/empresa";
 import { obtenerEmpresa } from "@/lib/empresa-datos";
@@ -23,7 +25,8 @@ export default async function LayoutTienda({ children }: LayoutProps<"/">) {
           </Link>
         </div>
       </div>
-      <header className="sticky top-0 z-40 border-b border-line bg-white/85 backdrop-blur-md">
+      <AnimacionesTienda />
+      <header id="cabecera" className="sticky top-0 z-40 border-b border-line bg-white/85 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-6 px-4 sm:px-6">
           <Logo />
           <nav className="hidden items-center gap-1 lg:flex">
@@ -31,7 +34,7 @@ export default async function LayoutTienda({ children }: LayoutProps<"/">) {
               <Link
                 key={n.href}
                 href={n.href}
-                className="rounded-lg px-3 py-2 text-sm font-medium text-ink-2 transition hover:bg-surface-2 hover:text-ink"
+                className="relative rounded-lg px-3 py-2 text-sm font-medium text-ink-2 transition after:absolute after:inset-x-3 after:bottom-1 after:h-0.5 after:origin-left after:scale-x-0 after:rounded-full after:bg-accent after:transition-transform after:duration-300 hover:bg-surface-2 hover:text-ink hover:after:scale-x-100"
               >
                 {n.texto}
               </Link>
@@ -44,13 +47,13 @@ export default async function LayoutTienda({ children }: LayoutProps<"/">) {
               rel="noreferrer"
               className="btn-accent hidden sm:inline-flex"
             >
-              <MessageCircle className="size-4" /> Escríbenos
+              <IconoWhatsApp className="size-4" /> Escríbenos
             </a>
             <details className="relative lg:hidden">
               <summary className="btn-ghost list-none px-3 [&::-webkit-details-marker]:hidden" aria-label="Menú">
                 <Menu className="size-5" />
               </summary>
-              <div className="card absolute right-0 mt-2 w-56 p-2 shadow-xl">
+              <div className="menu-movil card absolute right-0 mt-2 w-56 p-2 shadow-xl">
                 {nav.map((n) => (
                   <Link key={n.href} href={n.href} className="block rounded-lg px-3 py-2 text-sm hover:bg-surface-2">
                     {n.texto}
@@ -63,6 +66,8 @@ export default async function LayoutTienda({ children }: LayoutProps<"/">) {
             </details>
           </div>
         </div>
+        {/* progreso de lectura al deslizar */}
+        <div id="progreso-lectura" className="absolute inset-x-0 -bottom-px h-0.5 bg-gradient-to-r from-accent via-[#ff6b7d] to-blue" />
       </header>
 
       <main className="flex-1">{children}</main>
@@ -91,7 +96,7 @@ export default async function LayoutTienda({ children }: LayoutProps<"/">) {
           <div className="min-w-0 space-y-3 text-sm">
             <p className="font-semibold text-white">Contacto</p>
             <a className="flex gap-2 hover:text-white" href={enlaceWhatsApp(e.whatsapp, "Hola")} target="_blank" rel="noreferrer">
-              <MessageCircle className="mt-0.5 size-4 shrink-0" /> WhatsApp
+              <IconoWhatsApp className="mt-0.5 size-4 shrink-0" /> WhatsApp
             </a>
             {e.telefono && (
               <a className="flex gap-2 hover:text-white" href={`tel:${e.telefono.replace(/\s/g, "")}`}>

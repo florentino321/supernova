@@ -6,11 +6,9 @@ export const LEMA = "Laptops importadas de EE.UU., revisadas una por una";
 /** Reglas para separar un equipo con adelanto (se muestran en la web y se usan en el panel). */
 export const RESERVA = {
   dias: 7, // días que se guarda el equipo
-  porcentaje: 0.1, // adelanto sugerido: 10 % del precio…
-  minimo: 100, // …y como mínimo S/ 100
+  adelanto: 100, // adelanto fijo en soles (el habitual para envíos por Shalom)
 };
-export const adelantoSugerido = (precio: number) =>
-  Math.min(Math.max(RESERVA.minimo, Math.ceil((precio * RESERVA.porcentaje) / 10) * 10), Math.floor(precio / 2));
+export const adelantoSugerido = (precio: number) => Math.min(RESERVA.adelanto, Math.floor(precio / 2));
 
 /**
  * Los vendedores ingresan con un "usuario" (sin correo). Internamente Supabase Auth

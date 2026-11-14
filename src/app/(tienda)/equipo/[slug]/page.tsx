@@ -1,15 +1,18 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CheckCircle2, ChevronRight, HandCoins, MessageCircle, ShieldCheck, Store, Truck } from "lucide-react";
+import { CheckCircle2, ChevronRight, HandCoins, ShieldCheck, Store, Truck } from "lucide-react";
 import { ChipCondicion } from "@/components/chips";
+import { IconoWhatsApp } from "@/components/iconos";
 import { TarjetaEquipo } from "@/components/tarjeta-equipo";
+import { TransicionPagina } from "@/components/transicion-pagina";
 import { obtenerCatalogo, obtenerEquipo } from "@/lib/catalogo";
-import { enSoles, etiquetaCondicion } from "@/lib/formato";
+import { enSoles, enSolesCorto, etiquetaCondicion } from "@/lib/formato";
 import { RESERVA, adelantoSugerido, enlaceWhatsApp } from "@/lib/empresa";
 import { obtenerEmpresa } from "@/lib/empresa-datos";
 import { URL_SITIO } from "@/lib/sitio";
 import { FormAviso } from "./form-aviso";
 import { Galeria } from "./galeria";
+import { Revelar } from "@/components/revelar";
 
 const explicacionGrado = {
   A: "Estado estético excelente: sin marcas visibles o mínimas, parece nuevo.",
@@ -58,7 +61,7 @@ export default async function Equipo({ params }: PageProps<"/equipo/[slug]">) {
       `Cuenta con procesador ${u.procesador}, ${u.ram_gb} GB de RAM, ${u.almacenamiento}` +
       `${u.gpu ? (/^gráficos integrados/i.test(u.gpu) ? ` y ${u.gpu.toLowerCase()}` : ` y tarjeta de video ${u.gpu}`) : ""}, con pantalla de ${u.pantalla_pulg}″. ` +
       `Se entrega con ${u.garantia_meses} meses de garantía.`;
-  const mensajeReserva = `Hola, quiero separar la ${nombre} (${u.sku})${u.estado === "en_transito" ? " que está en camino" : ""} con un adelanto de ${enSoles(adelanto)}. ¿Cómo hago el pago?`;
+  const mensajeReserva = `Hola, quiero separar la ${nombre} (${u.sku})${u.estado === "en_transito" ? " que está en camino" : ""} con un adelanto de ${enSolesCorto(adelanto)}. ¿Cómo hago el pago?`;
 
   // Datos estructurados para Google (precio, disponibilidad y condición en los resultados de búsqueda)
   const jsonLd = {
@@ -100,6 +103,7 @@ export default async function Equipo({ params }: PageProps<"/equipo/[slug]">) {
   ];
 
   return (
+    <TransicionPagina key={slug}>
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <script
         type="application/ld+json"
@@ -116,12 +120,22 @@ export default async function Equipo({ params }: PageProps<"/equipo/[slug]">) {
       </nav>
 
       <div className="mt-6 grid gap-10 lg:grid-cols-[1.15fr_1fr]">
-        <Galeria medios={u.medios ?? []} marca={marca} categoria={u.modelos?.categorias?.slug} nombre={nombre} />
+        <Revelar>
+          <Galeria medios={u.medios ?? []} marca={marca} categoria={u.modelos?.categorias?.slug} nombre={nombre} />
+        </Revelar>
 
-        <div>
+        <Revelar>
           <div className="flex flex-wrap items-center gap-2">
             <ChipCondicion condicion={u.condicion} grado={u.grado} />
-            {u.estado === "disponible" && <span className="chip bg-emerald-50 text-emerald-700">● En tienda</span>}
+            {u.estado === "disponible" && (
+              <span className="chip bg-emerald-50 text-emerald-700">
+                <span className="relative flex size-2">
+                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500 opacity-60" />
+                  <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+                </span>
+                En tienda
+              </span>
+            )}
             {u.estado === "reservado" && <span className="chip bg-amber-100 text-amber-800">Reservado</span>}
             {u.estado === "en_transito" && <span className="chip bg-violet-100 text-violet-700">En camino desde EE.UU.</span>}
             {u.estado === "vendido" && <span className="chip bg-slate-800 text-white">Vendido</span>}
@@ -148,15 +162,16 @@ export default async function Equipo({ params }: PageProps<"/equipo/[slug]">) {
                 </span>
               )}
             </div>
-            <div className="mt-5 rounded-xl bg-surface-2 p-3 text-sm text-ink-2">
-              <strong className="text-ink">Pieza única.</strong> Solo existe esta unidad con esta configuración
-              {otrasConfig.length > 0 ? `; hay ${otrasConfig.length} configuración(es) más de este modelo abajo.` : "."}
-            </div>
             {vendible ? (
               <>
                 {u.estado === "disponible" && (
-                  <a href={enlaceWhatsApp(whatsapp, mensaje)} target="_blank" rel="noreferrer" className="btn-accent mt-5 w-full py-3 text-base">
-                    <MessageCircle className="size-5" /> Comprar por WhatsApp
+                  <a
+                    href={enlaceWhatsApp(whatsapp, mensaje)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn-whatsapp latido mt-5 w-full py-3 text-base font-bold"
+                  >
+                    <IconoWhatsApp className="size-5" /> Comprar por WhatsApp
                   </a>
                 )}
                 <a
@@ -165,7 +180,7 @@ export default async function Equipo({ params }: PageProps<"/equipo/[slug]">) {
                   rel="noreferrer"
                   className={u.estado === "en_transito" ? "btn-accent mt-5 w-full py-3 text-base" : "btn-ghost mt-2 w-full py-3"}
                 >
-                  <HandCoins className="size-5" /> Separarla con {enSoles(adelanto)} de adelanto
+                  <HandCoins className="size-5" /> Sepárala con {enSolesCorto(adelanto)} de adelanto
                 </a>
                 <p className="mt-2 text-center text-xs text-muted">
                   {u.estado === "en_transito"
@@ -207,11 +222,11 @@ export default async function Equipo({ params }: PageProps<"/equipo/[slug]">) {
               <p className="mt-1 text-muted">{explicacionGrado[u.grado]}</p>
             </div>
           )}
-        </div>
+        </Revelar>
       </div>
 
       <div className="mt-14 grid gap-8 lg:grid-cols-[1.15fr_1fr]">
-        <section>
+        <Revelar como="section">
           <h2 className="font-display text-2xl font-extrabold">Ficha técnica</h2>
           <dl className="card mt-4 divide-y divide-line">
             {specs
@@ -223,8 +238,8 @@ export default async function Equipo({ params }: PageProps<"/equipo/[slug]">) {
                 </div>
               ))}
           </dl>
-        </section>
-        <section>
+        </Revelar>
+        <Revelar como="section">
           <h2 className="font-display text-2xl font-extrabold">Descripción</h2>
           <p className="mt-4 leading-relaxed text-ink-2">{textoDescripcion}</p>
           <h3 className="mt-6 font-semibold">Incluye</h3>
@@ -233,12 +248,12 @@ export default async function Equipo({ params }: PageProps<"/equipo/[slug]">) {
               <li key={t} className="flex gap-2"><CheckCircle2 className="size-4 text-green" /> {t}</li>
             ))}
           </ul>
-        </section>
+        </Revelar>
       </div>
 
       {otrasConfig.length > 0 && (
         <section className="mt-16">
-          <h2 className="font-display text-2xl font-extrabold">Otras configuraciones de este modelo</h2>
+          <Revelar como="h2" className="font-display text-2xl font-extrabold">Otras configuraciones de este modelo</Revelar>
           <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {otrasConfig.map((x) => <TarjetaEquipo key={x.id} u={x} />)}
           </div>
@@ -247,12 +262,13 @@ export default async function Equipo({ params }: PageProps<"/equipo/[slug]">) {
 
       {relacionados.length > 0 && (
         <section className="mt-16">
-          <h2 className="font-display text-2xl font-extrabold">También te puede interesar</h2>
+          <Revelar como="h2" className="font-display text-2xl font-extrabold">También te puede interesar</Revelar>
           <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {relacionados.map((x) => <TarjetaEquipo key={x.id} u={x} />)}
           </div>
         </section>
       )}
     </div>
+    </TransicionPagina>
   );
 }
